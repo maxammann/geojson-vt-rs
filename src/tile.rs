@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
 use geojson::feature::Id;
-use geojson::{FeatureCollection, JsonValue};
+use geojson::{FeatureCollection, JsonValue, LineStringType, PolygonType};
 use serde_json::Number;
 
 use crate::types::{
     VtEmpty, VtFeature, VtFeatures, VtGeometry, VtGeometryCollection, VtLineString,
     VtMultiLineString, VtMultiPoint, VtMultiPolygon, VtPoint, VtPolygon,
 };
-use crate::BBox;
+use crate::{BBox, MultiLineStringType, MultiPointType, MultiPolygonType};
 
 pub struct Tile {
     features: geojson::FeatureCollection,
@@ -243,29 +243,82 @@ impl InternalTile {
 }
 
 fn transform_multi_polygon_feature(p0: &VtMultiPolygon) -> _ {
-    todo!()
+    let result: MultiPolygonType;
+    result.reserve(polygons.size());
+    for polygon in polygons {
+        let p = transform(polygon);
+        if (!p.empty()) {
+            result.emplace_back(p);
+        }
+    }
+    return result;
 }
 
 fn transform_multi_point_feature(p0: &VtMultiPoint) -> _ {
-    todo!()
+    let result: MultiPointType;
+    result.reserve(points.size());
+    for p in points {
+        result.emplace_back(transform(p));
+    }
+    return result;
 }
 
 fn transform_line_string(p0: &VtLineString) -> _ {
-    todo!()
+    let result: LineStringType;
+    if (line.dist > tolerance) {
+        result.reserve(line.size());
+        for p in line {
+            if (p.z > sq_tolerance) {
+                result.emplace_back(transform(p));
+            }
+        }
+    }
+    return result;
 }
 
 fn transform_multi_line_string(p0: &VtMultiLineString) -> _ {
-    todo!()
+    let result: MultiLineStringType;
+    result.reserve(lines.size());
+    for line in lines {
+        if (line.dist > tolerance) {
+            result.emplace_back(transform(line));
+        }
+    }
+    return result;
 }
 
 fn transform_polygon(p0: &VtPolygon) -> _ {
-    todo!()
+    let result: PolygonType;
+    result.reserve(rings.size());
+    for ring in rings {
+        if (ring.area > sq_tolerance) {
+            result.emplace_back(transform_linear_ring(ring));
+        }
+    }
+    return result;
 }
 
-fn transform_point(p0: &VtPoint) -> _ {
-    todo!()
+fn transform_point(p: &VtPoint) -> _ {
+    tile.num_simplified = tile.num_simplified + 1;
+    return VtPoint::new(
+        ((p.x * z2 - x) * extent).round() as i16,
+        ((p.y * z2 - y) * extent).round() as i16,
+    );
 }
 
 fn transform_empty(empty: VtEmpty) -> _ {
-    todo!()
+    return empty;
+}
+
+fn transform_linear_ring(empty: VtEmpty) -> _ {
+    let result: LinearRingType;
+    if (ring.area > sq_tolerance) {
+        result.reserve(ring.size());
+        for p in ring {
+            if (p.z > sq_tolerance) {
+                result.emplace_back(transform(p));
+            }
+        }
+    }
+    return result;
 }
