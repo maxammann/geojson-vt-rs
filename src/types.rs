@@ -7,7 +7,7 @@ use crate::BBox;
 pub type VtEmpty = ();
 pub type VtGeometryCollection = Vec<VtGeometry>;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum VtGeometry {
     Empty(VtEmpty),
     Point(VtPoint),
@@ -19,7 +19,7 @@ pub enum VtGeometry {
     GeometryCollection(VtGeometryCollection),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct VtPoint {
     pub x: f64,
     pub y: f64,
@@ -89,7 +89,7 @@ pub fn intersect_y(a: &VtPoint, b: &VtPoint, y: f64, t: f64) -> VtPoint {
 
 pub type VtMultiPoint = Vec<VtPoint>;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct VtLineString {
     pub elements: Vec<VtPoint>,
     pub dist: f64,
@@ -108,16 +108,26 @@ impl VtLineString {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct VtLinearRing {
     pub elements: Vec<VtPoint>,
     pub area: f64, // polygon ring area
 }
+
+impl VtLinearRing {
+    pub fn new() -> VtLinearRing {
+       Self {
+           elements: vec![],
+           area: 0.0,
+       }
+    }
+}
+
 pub type VtMultiLineString = Vec<VtLineString>;
 pub type VtPolygon = Vec<VtLinearRing>;
 pub type VtMultiPolygon = Vec<VtPolygon>;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct VtFeature {
     pub geometry: VtGeometry,
     pub properties: HashMap<String, geojson::JsonValue>,

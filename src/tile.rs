@@ -1,32 +1,41 @@
 use std::collections::HashMap;
 
 use geojson::feature::Id;
-use geojson::{FeatureCollection, JsonValue, LineStringType, PolygonType};
+use geojson::{Feature, FeatureCollection, JsonValue, LineStringType, PointType, PolygonType};
 use serde_json::Number;
 
-use crate::types::{
-    VtEmpty, VtFeature, VtFeatures, VtGeometry, VtGeometryCollection, VtLineString,
-    VtMultiLineString, VtMultiPoint, VtMultiPolygon, VtPoint, VtPolygon,
-};
-use crate::{BBox, MultiLineStringType, MultiPointType, MultiPolygonType};
+use crate::types::{VtEmpty, VtFeature, VtFeatures, VtGeometry, VtGeometryCollection, VtLinearRing, VtLineString, VtMultiLineString, VtMultiPoint, VtMultiPolygon, VtPoint, VtPolygon};
+use crate::{BBox, LinearRingType, MultiLineStringType, MultiPointType, MultiPolygonType};
 
+pub const EMPTY_TILE: Tile = Tile {
+    features: FeatureCollection {
+        bbox: None,
+        features: vec![],
+        foreign_members: None,
+    },
+    num_points: 0,
+    num_simplified: 0,
+};
+
+#[derive(PartialEq)]
 pub struct Tile {
     features: geojson::FeatureCollection,
-    num_points: u32,
+    pub num_points: u32,
     num_simplified: u32,
 }
 
+#[derive(PartialEq)]
 pub struct InternalTile {
     extent: u16,
-    z: u8,
-    x: u32,
-    y: u32,
+    pub z: u8,
+    pub x: u32,
+    pub y: u32,
     z2: f64,
     tolerance: f64,
     sq_tolerance: f64,
     line_metrics: bool,
-    source_features: VtFeatures,
-    bbox: BBox,
+    pub source_features: VtFeatures,
+    pub bbox: BBox,
     pub tile: Tile,
 }
 
@@ -85,7 +94,7 @@ impl InternalTile {
 
 impl InternalTile {
     fn add_geometry_feature(
-        &self,
+        &mut self,
         geom: &VtGeometry,
         props: &HashMap<String, JsonValue>,
         id: &Option<geojson::feature::Id>,
@@ -94,7 +103,7 @@ impl InternalTile {
             VtGeometry::Empty(empty) => self.add_empty_feature(empty, props, id),
             VtGeometry::Point(point) => self.add_point_feature(point, props, id),
             VtGeometry::MultiPoint(multi_point) => {
-                self.ass_multi_point_feature(multi_point, props, id)
+                self.add_multi_point_feature(multi_point, props, id)
             }
             VtGeometry::LineString(line_string) => {
                 self.add_line_string_feature(line_string, props, id)
@@ -113,52 +122,54 @@ impl InternalTile {
     }
 
     fn add_empty_feature(
-        &self,
+        &mut self,
         value: &VtEmpty,
         props: &HashMap<String, JsonValue>,
         id: &Option<Id>,
     ) {
-        self.tile.features.push(transform_empty(value), props, id);
+        // TODO self.tile.features.features.push(self.transform_empty(value), props, id);
     }
 
     fn add_point_feature(
-        &self,
+        &mut self,
         value: &VtPoint,
         props: &HashMap<String, JsonValue>,
         id: &Option<Id>,
     ) {
-        self.tile.features.push(transform_point(value), props, id);
+        self.tile.features.features.push(self.transform_point(value), props, id);
     }
 
-    fn ass_multi_point_feature(
-        &self,
+    fn add_multi_point_feature(
+        &mut self,
         value: &VtMultiPoint,
         props: &HashMap<String, JsonValue>,
         id: &Option<Id>,
     ) {
-        let new_multi = transform_multi_point_feature(value);
+        let new_multi = self.transform_multi_point_feature(value);
 
         match new_multi.len() {
             0 => {}
             1 => self
                 .tile
                 .features
-                .push(VtFeature::new(new_multi[0], props, id)),
+                .features
+                .push(Feature::new(new_multi[0], props, id)),
             _ => self
                 .tile
                 .features
-                .push(VtFeature::new(new_multi, props, id)),
+                .features
+                .push(Feature::new(new_multi, props, id)),
         }
     }
     fn add_line_string_feature(
-        &self,
+        &mut self,
         line: &VtLineString,
         props: &HashMap<String, JsonValue>,
         id: &Option<Id>,
     ) {
-        let new_line = transform_line_string(line);
-        if (!new_line.empty()) {
-            if (self.line_metrics) {
+        let new_line = self.transform_line_string(line);
+        if !new_line.is_empty() {
+            if self.line_metrics {
                 let mut newProps = props;
                 newProps.insert(
                     "mapbox_clip_start".to_string(),
@@ -170,6 +181,7 @@ impl InternalTile {
                 );
                 self.tile
                     .features
+                    .features
                     .push(VtFeature::new(new_line, newProps, id));
             } else {
                 self.tile.features.push(VtFeature::new(new_line, props, id));
@@ -177,12 +189,12 @@ impl InternalTile {
         }
     }
     fn add_multi_line_string_feature(
-        &self,
+        &mut self,
         value: &VtMultiLineString,
         props: &HashMap<String, JsonValue>,
         id: &Option<Id>,
     ) {
-        let new_multi = transform_multi_line_string(value);
+        let new_multi = self.transform_multi_line_string(value);
 
         match new_multi.len() {
             0 => {}
@@ -197,25 +209,25 @@ impl InternalTile {
         }
     }
     fn add_polygon_feature(
-        &self,
+        &mut self,
         value: &VtPolygon,
         props: &HashMap<String, JsonValue>,
         id: &Option<Id>,
     ) {
-        let new_polygon = transform_polygon(value);
-        if (!new_polygon.empty()) {
+        let new_polygon = self.transform_polygon(value);
+        if !new_polygon.is_empty() {
             self.tile
                 .features
                 .emplace_back(VtFeature::new(new_polygon, props, id));
         }
     }
     fn add_multi_polygon_feature(
-        &self,
+        &mut self,
         value: &VtMultiPolygon,
         props: &HashMap<String, JsonValue>,
         id: &Option<Id>,
     ) {
-        let new_multi = transform_multi_polygon_feature(value);
+        let new_multi = self.transform_multi_polygon_feature(value);
 
         match new_multi.len() {
             0 => {}
@@ -230,7 +242,7 @@ impl InternalTile {
         }
     }
     fn add_geometry_collection_feature(
-        &self,
+        &mut self,
         value: &VtGeometryCollection,
         props: &HashMap<String, JsonValue>,
         id: &Option<Id>,
@@ -240,85 +252,89 @@ impl InternalTile {
             self.add_geometry_feature(geom, props, id)
         }
     }
-}
 
-fn transform_multi_polygon_feature(p0: &VtMultiPolygon) -> _ {
-    let result: MultiPolygonType;
-    result.reserve(polygons.size());
-    for polygon in polygons {
-        let p = transform(polygon);
-        if (!p.empty()) {
-            result.emplace_back(p);
-        }
-    }
-    return result;
-}
 
-fn transform_multi_point_feature(p0: &VtMultiPoint) -> _ {
-    let result: MultiPointType;
-    result.reserve(points.size());
-    for p in points {
-        result.emplace_back(transform(p));
-    }
-    return result;
-}
-
-fn transform_line_string(p0: &VtLineString) -> _ {
-    let result: LineStringType;
-    if (line.dist > tolerance) {
-        result.reserve(line.size());
-        for p in line {
-            if (p.z > sq_tolerance) {
-                result.emplace_back(transform(p));
+    fn transform_multi_polygon_feature(&mut self, polygons: &VtMultiPolygon) -> MultiPolygonType {
+        let mut result: MultiPolygonType = Vec::new();
+        result.reserve(polygons.len());
+        for polygon in polygons {
+            let p = self.transform_polygon(polygon);
+            if !p.is_empty() {
+                result.push(p);
             }
         }
+        return result;
     }
-    return result;
-}
 
-fn transform_multi_line_string(p0: &VtMultiLineString) -> _ {
-    let result: MultiLineStringType;
-    result.reserve(lines.size());
-    for line in lines {
-        if (line.dist > tolerance) {
-            result.emplace_back(transform(line));
+    fn transform_multi_point_feature(&mut self, points: &VtMultiPoint) -> MultiPointType {
+        let mut result: MultiPointType = Vec::new();
+        result.reserve(points.len());
+        for p in points {
+            result.push(self.transform_point(p));
         }
+        return result;
     }
-    return result;
-}
 
-fn transform_polygon(p0: &VtPolygon) -> _ {
-    let result: PolygonType;
-    result.reserve(rings.size());
-    for ring in rings {
-        if (ring.area > sq_tolerance) {
-            result.emplace_back(transform_linear_ring(ring));
-        }
-    }
-    return result;
-}
-
-fn transform_point(p: &VtPoint) -> _ {
-    tile.num_simplified = tile.num_simplified + 1;
-    return VtPoint::new(
-        ((p.x * z2 - x) * extent).round() as i16,
-        ((p.y * z2 - y) * extent).round() as i16,
-    );
-}
-
-fn transform_empty(empty: VtEmpty) -> _ {
-    return empty;
-}
-
-fn transform_linear_ring(empty: VtEmpty) -> _ {
-    let result: LinearRingType;
-    if (ring.area > sq_tolerance) {
-        result.reserve(ring.size());
-        for p in ring {
-            if (p.z > sq_tolerance) {
-                result.emplace_back(transform(p));
+    fn transform_line_string(&mut self, line: &VtLineString) -> LineStringType {
+        let mut result: LineStringType = Vec::new();
+        if line.dist > self.tolerance {
+            result.reserve(line.elements.len());
+            for p in &line.elements {
+                if p.z > self.sq_tolerance {
+                    result.push(self.transform_point(p));
+                }
             }
         }
+        return result;
     }
-    return result;
+
+    fn transform_multi_line_string(&mut self, lines: &VtMultiLineString) -> MultiLineStringType {
+        let mut result: MultiLineStringType= Vec::new();
+        result.reserve(lines.len());
+        for line in lines {
+            if line.dist > self.tolerance {
+                result.push(self.transform_line_string(line));
+            }
+        }
+        return result;
+    }
+
+    fn transform_polygon(&mut self, rings: &VtPolygon) -> PolygonType {
+        let mut result: PolygonType= Vec::new();
+        result.reserve(rings.len());
+        for ring in rings {
+            if ring.area > self.sq_tolerance {
+                result.push(self.transform_linear_ring(ring));
+            }
+        }
+        return result;
+    }
+
+    fn transform_point(&mut self, p: &VtPoint) -> PointType {
+        self.tile.num_simplified = self.tile.num_simplified + 1;
+        return Vec::from(
+            &[
+                ((p.x * self.z2 - self.x as f64) * self.extent as f64).round(), // TODO do these have the right type. Shouldnt it be i16?
+                ((p.y * self.z2 - self.y as f64) * self.extent as f64).round(),
+            ]
+        );
+    }
+
+    // TODO
+    // fn transform_empty(&self, empty: VtEmpty) -> _ {
+    //    return empty;
+    //}
+
+    fn transform_linear_ring(&mut self, ring: &VtLinearRing) -> LinearRingType {
+        let mut result: LinearRingType = Vec::new();
+        if ring.area > self.sq_tolerance {
+            result.reserve(ring.elements.len());
+            for p in &ring.elements {
+                if p.z > self.sq_tolerance {
+                    result.push(self.transform_point(p));
+                }
+            }
+        }
+        return result;
+    }
 }
