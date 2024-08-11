@@ -1,9 +1,13 @@
 use std::collections::HashMap;
-use std::sync::Arc;
-use crate::{Coordinate, Rect};
+
+use euclid::{Point2D, UnknownUnit};
+
+use crate::BBox;
 
 pub type VtEmpty = ();
-pub struct VtGeometryCollection;
+pub type VtGeometryCollection = Vec<VtGeometry>;
+
+#[derive(Clone)]
 pub enum VtGeometry {
     Empty(VtEmpty),
     Point(VtPoint),
@@ -25,94 +29,133 @@ pub struct VtPoint {
 impl VtPoint {
     // Constructor with z value
     pub fn new(x: f64, y: f64, z: f64) -> VtPoint {
-        // C++: vt_point(double x_, double y_, double z_) : mapbox::geometry::point<double>(x_, y_), z(z_) {}
         VtPoint { x, y, z }
     }
 
     // Constructor without z value
     pub fn new_without_z(x: f64, y: f64) -> VtPoint {
-        // C++: vt_point(double x_, double y_) : vt_point(x_, y_, 0.0) {}
         VtPoint::new(x, y, 0.0)
     }
 }
 
 // Function templates to get coordinates
-pub trait GetCoordinate {
-    fn get_x(&self) -> f64;
-    fn get_y(&self) -> f64;
+pub trait GetCoordinate<const I: usize> {
+    fn get(&self) -> f64;
 }
 
-impl GetCoordinate for VtPoint {
-    fn get_x(&self) -> f64 {
-        // C++: return p.x;
-        self.x
+impl<const I: usize> GetCoordinate<I> for VtPoint {
+    fn get(&self) -> f64 {
+        match I {
+            0 => self.x,
+            1 => self.y,
+            _ => {
+                panic!("GetCoordinate is only implemented for I = 0 and I = 1")
+            }
+        }
     }
-    fn get_y(&self) -> f64 {
-        // C++: return p.y;
-        self.y
+}
+
+impl<const I: usize> GetCoordinate<I> for Point2D<f64, UnknownUnit> {
+    fn get(&self) -> f64 {
+        match I {
+            0 => self.x,
+            1 => self.y,
+            _ => {
+                panic!("GetCoordinate is only implemented for I = 0 and I = 1")
+            }
+        }
     }
 }
 
 // Calculation of progress along a line
 pub fn calc_progress_x(a: &VtPoint, b: &VtPoint, x: f64) -> f64 {
-    // C++: return (x - a.x) / (b.x - a.x);
     (x - a.x) / (b.x - a.x)
 }
+
 pub fn calc_progress_y(a: &VtPoint, b: &VtPoint, y: f64) -> f64 {
-    // C++: return (y - a.y) / (b.y - a.y);
     (y - a.y) / (b.y - a.y)
 }
 
 // Intersection calculation based on linear interpolation
 pub fn intersect_x(a: &VtPoint, b: &VtPoint, x: f64, t: f64) -> VtPoint {
-    // C++: const double y = (b.y - a.y) * t + a.y;
-    // C++: return { x, y, 1.0 };
     let y = (b.y - a.y) * t + a.y;
     VtPoint::new(x, y, 1.0)
 }
+
 pub fn intersect_y(a: &VtPoint, b: &VtPoint, y: f64, t: f64) -> VtPoint {
-    // C++: const double x = (b.x - a.x) * t + a.x;
-    // C++: return { x, y, 1.0 };
     let x = (b.x - a.x) * t + a.x;
     VtPoint::new(x, y, 1.0)
 }
 
-// Container types translated to Rust Vec types
 pub type VtMultiPoint = Vec<VtPoint>;
-pub type VtLineString = Vec<VtPoint>;
-pub type VtLinearRing = Vec<VtPoint>;
+
+#[derive(Clone)]
+pub struct VtLineString {
+    pub elements: Vec<VtPoint>,
+    pub dist: f64,
+    pub seg_start: f64,
+    pub seg_end: f64,
+}
+
+impl VtLineString {
+    pub fn new() -> Self {
+        Self {
+            elements: vec![],
+            dist: 0.0, // line length
+            seg_start: 0.0,
+            seg_end: 0.0, // seg_start and seg_end are distance along a line in tile units, when lineMetrics = true
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct VtLinearRing {
+    pub elements: Vec<VtPoint>,
+    pub area: f64, // polygon ring area
+}
 pub type VtMultiLineString = Vec<VtLineString>;
 pub type VtPolygon = Vec<VtLinearRing>;
 pub type VtMultiPolygon = Vec<VtPolygon>;
 
-
-// Feature definition translated to Rust
+#[derive(Clone)]
 pub struct VtFeature {
     pub geometry: VtGeometry,
-    pub properties: Arc<HashMap<String, serde_json::Value>>,
-    pub id: Option<serde_json::Value>,
-    pub bbox: Rect<f64>,
+    pub properties: HashMap<String, geojson::JsonObject>,
+    pub id: Option<geojson::feature::Id>,
+    pub bbox: BBox,
     pub num_points: u32,
 }
 
 impl VtFeature {
     pub fn new(
         geom: VtGeometry,
-        props: HashMap<String, serde_json::Value>,
-        id: serde_json::Value,
+        props: HashMap<String, geojson::JsonObject>,
+        id: Option<geojson::feature::Id>,
     ) -> Self {
-        // C++: assert(properties);
-        // C++: processGeometry();
-        let bbox = Rect::new(
-            Coordinate { x: 2.0, y: 1.0 },
-            Coordinate { x: -1.0, y: 0.0 },
-        );
-        VtFeature {
+        let mut feature = Self {
             geometry: geom,
-            properties: Arc::new(props),
-            id: Some(id),
-            bbox,
-            num_points: 0, // Placeholder, calculation should occur in processing method
+            properties: props,
+            id,
+            bbox: Default::default(),
+            num_points: 0,
+        };
+        feature.process_geometry();
+        feature
+    }
+}
+
+impl VtFeature {
+    fn process_geometry(&mut self) {
+        // TODO verify this translation
+        match &mut self.geometry {
+            VtGeometry::Point(point) => {
+                self.bbox.min.x = (point.x).min(self.bbox.min.x);
+                self.bbox.min.y = (point.y).min(self.bbox.min.y);
+                self.bbox.max.x = (point.x).max(self.bbox.max.x);
+                self.bbox.max.y = (point.y).max(self.bbox.max.y);
+                self.num_points = self.num_points + 1;
+            }
+            _ => {}
         }
     }
 }

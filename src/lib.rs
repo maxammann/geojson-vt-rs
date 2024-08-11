@@ -1,5 +1,6 @@
+use euclid::{Point2D, UnknownUnit};
+use geojson::{FeatureCollection, GeoJson, Geometry, LineStringType, PointType, PolygonType};
 use std::collections::HashMap;
-use geojson::{FeatureCollection, GeoJson, PointType};
 
 mod clip;
 mod convert;
@@ -7,7 +8,6 @@ mod simplify;
 mod tile;
 mod types;
 mod wrap;
-
 
 pub struct ToFeatureCollection;
 
@@ -222,21 +222,17 @@ pub struct InternalTile {
 
 #[derive(Clone, Default)]
 pub struct BBox {
-    pub min: PointType,
-    pub max: PointType,
+    pub min: Point2D<f64, UnknownUnit>,
+    pub max: Point2D<f64, UnknownUnit>,
 }
 
-
-pub struct Rect<T>(T);
-
-impl<T> Rect<T> {
-    pub fn new(x: Coordinate, y: Coordinate) -> Self {
-        todo!()
+impl BBox {
+    pub fn new(min: Point2D<f64, UnknownUnit>, max: Point2D<f64, UnknownUnit>) -> Self {
+        Self { min, max }
     }
 }
 
-pub struct Features;
-pub struct Coordinate {
-    x: f64,
-    y: f64
-}
+pub type MultiPointType = Vec<PointType>;
+pub type MultiLineStringType = Vec<LineStringType>;
+pub type MultiPolygonType = Vec<PolygonType>;
+pub type GeometryCollectionType = Vec<Geometry>;

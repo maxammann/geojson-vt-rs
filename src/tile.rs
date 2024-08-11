@@ -1,8 +1,8 @@
-use geojson::{Feature, PointType};
 use crate::BBox;
+use geojson::{Feature, PointType};
 
 pub struct Tile {
-    features: Vec<Feature>, // Replace with actual type definition in Rust
+    features: Vec<Feature>,
     num_points: u32,
     num_simplified: u32,
 }
@@ -16,8 +16,8 @@ pub struct InternalTile {
     tolerance: f64,
     sq_tolerance: f64,
     line_metrics: bool,
-    source_features: Vec<Feature>, // Replace with actual type definition in Rust
-    bbox: BBox,                    // Define BBox type or replace with actual type in Rust
+    source_features: Vec<Feature>,
+    bbox: BBox,
     tile: Tile,
 }
 
@@ -31,37 +31,7 @@ impl InternalTile {
         tolerance: f64,
         line_metrics: bool,
     ) -> InternalTile {
-        let z2 = 2f64.powi(z as i32);
-        let sq_tolerance = tolerance * tolerance;
-
-        let mut tile = Tile {
-            features: Vec::new(),
-            num_points: 0,
-            num_simplified: 0,
-        };
-
-        tile.features.reserve(source.len());
-
-        // Here the original C++ logic is implemented in Rust
-        // Detailed logic of each function should follow here as comments
-        //...
-
-        InternalTile {
-            extent,
-            z,
-            x,
-            y,
-            z2,
-            tolerance,
-            sq_tolerance,
-            line_metrics,
-            source_features: source.clone(),
-            bbox: BBox {
-                min: vec![2.0, 1.0],
-                max: vec![-1.0, 0.0],
-            },
-            tile,
-        }
+        unimplemented!()
     }
 
     // Additional methods would follow here with detailed comments
