@@ -1,4 +1,5 @@
-use crate::{BBox, Feature, Point};
+use geojson::{Feature, PointType};
+use crate::BBox;
 
 pub struct Tile {
     features: Vec<Feature>, // Replace with actual type definition in Rust
@@ -56,8 +57,8 @@ impl InternalTile {
             line_metrics,
             source_features: source.clone(),
             bbox: BBox {
-                min: Point { x: 2.0, y: 1.0 },
-                max: Point { x: -1.0, y: 0.0 },
+                min: vec![2.0, 1.0],
+                max: vec![-1.0, 0.0],
             },
             tile,
         }

@@ -1,23 +1,18 @@
+use std::collections::HashMap;
+use geojson::{FeatureCollection, GeoJson, PointType};
+
 mod clip;
 mod convert;
 mod simplify;
 mod tile;
 mod types;
 mod wrap;
-use std::collections::HashMap;
 
-pub type GeoJSON = GeometryOrFeatureOrFeatureCollection;
-
-pub enum GeometryOrFeatureOrFeatureCollection {
-    Geometry(Geometry),
-    Feature(Feature),
-    FeatureCollection(FeatureCollection),
-}
 
 pub struct ToFeatureCollection;
 
 impl ToFeatureCollection {
-    pub fn visit(&self, value: &GeoJSON) -> FeatureCollection {
+    pub fn visit(&self, value: &GeoJson) -> FeatureCollection {
         // C++ equivalent:
         // feature_collection operator()(const feature_collection& value) const {
         //     return value;
@@ -59,7 +54,7 @@ pub fn to_id(z: u8, x: u32, y: u32) -> u64 {
 }
 
 pub fn geojson_to_tile(
-    geojson: &GeoJSON,
+    geojson: &GeoJson,
     z: u8,
     x: u32,
     y: u32,
@@ -227,27 +222,8 @@ pub struct InternalTile {
 
 #[derive(Clone, Default)]
 pub struct BBox {
-    pub min: Point,
-    pub max: Point,
-}
-
-#[derive(Clone, Default)]
-pub struct Point {
-    pub x: f64,
-    pub y: f64,
-}
-
-#[derive(Clone)]
-pub struct Geometry;
-
-#[derive(Clone)]
-pub struct Feature {
-    pub geometry: Geometry,
-}
-
-#[derive(Clone, Default)]
-pub struct FeatureCollection {
-    pub features: Vec<Feature>,
+    pub min: PointType,
+    pub max: PointType,
 }
 
 

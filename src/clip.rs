@@ -1,4 +1,4 @@
-use crate::types::VtLinearRing;
+use crate::types::{*};
 
 pub struct Clipper<const I: u8> {
     k1: f64,
@@ -179,23 +179,3 @@ pub fn clip<const I: u8>(
     unimplemented!()
 }
 
-// Define the geometry type structures and enums
-pub struct VtEmpty;
-pub struct VtPoint;
-pub struct VtMultiPoint;
-pub struct VtLineString;
-pub struct VtMultiLineString;
-pub struct VtPolygon;
-pub struct VtMultiPolygon;
-pub struct VtGeometryCollection;
-pub enum VtGeometry {
-    Empty(VtEmpty),
-    Point(VtPoint),
-    MultiPoint(VtMultiPoint),
-    LineString(VtLineString),
-    MultiLineString(VtMultiLineString),
-    Polygon(VtPolygon),
-    MultiPolygon(VtMultiPolygon),
-    GeometryCollection(VtGeometryCollection),
-}
-pub struct VtFeatures;

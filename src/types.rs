@@ -2,10 +2,19 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use crate::{Coordinate, Rect};
 
-// Define empty type equivalent to C++
 pub type VtEmpty = ();
+pub struct VtGeometryCollection;
+pub enum VtGeometry {
+    Empty(VtEmpty),
+    Point(VtPoint),
+    MultiPoint(VtMultiPoint),
+    LineString(VtLineString),
+    MultiLineString(VtMultiLineString),
+    Polygon(VtPolygon),
+    MultiPolygon(VtMultiPolygon),
+    GeometryCollection(VtGeometryCollection),
+}
 
-// Define vt_point struct equivalent to C++
 #[derive(Debug, Clone, Copy)]
 pub struct VtPoint {
     pub x: f64,
@@ -76,17 +85,6 @@ pub type VtMultiLineString = Vec<VtLineString>;
 pub type VtPolygon = Vec<VtLinearRing>;
 pub type VtMultiPolygon = Vec<VtPolygon>;
 
-// Geometry collection and variants translated using Rust enum and Vec
-pub enum VtGeometry {
-    Empty(VtEmpty),
-    Point(VtPoint),
-    LineString(VtLineString),
-    Polygon(VtPolygon),
-    MultiPoint(VtMultiPoint),
-    MultiLineString(VtMultiLineString),
-    MultiPolygon(VtMultiPolygon),
-    GeometryCollection(Vec<VtGeometry>),
-}
 
 // Feature definition translated to Rust
 pub struct VtFeature {
