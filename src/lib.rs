@@ -14,6 +14,7 @@ mod simplify;
 mod tile;
 mod types;
 mod wrap;
+mod tests;
 
 pub struct ToFeatureCollection;
 
@@ -149,7 +150,7 @@ impl GeoJSONVT {
         vt
     }
 
-    pub fn get_tile(&mut self, z: u8, x_: u32, y: u32) -> &Tile {
+    pub fn get_tile<'a>(&'a mut self, z: u8, x_: u32, y: u32) -> &'a Tile {
         if z > self.options.max_zoom {
             panic!("Requested zoom higher than maxZoom: {}", z);
         }
@@ -158,44 +159,40 @@ impl GeoJSONVT {
         let x = ((x_ % z2) + z2) % z2; // wrap tile x coordinate
         let id = to_id(z, x, y);
 
-        let mut it = self.tiles.get(&id);
-        if let Some(tile) = it {
-            return &tile.tile;
+
+        if self.tiles.contains_key(&id) {
+            return &self.tiles[&id].tile;
         }
 
-        it = self.find_parent(z, x, y);
+        if let Some(parent) = self.find_parent(z, x, y) {
+            // if we found a parent tile containing the original geometry, we can drill down from it
 
-        if it.is_none() {
+            // drill down parent tile up to the requested one
+            self.split_tile(
+                &parent.source_features.clone(),
+                parent.z,
+                parent.x,
+                parent.y,
+                z,
+                x,
+                y,
+            );
+
+            if self.tiles.contains_key(&id) {
+                return &self.tiles[&id].tile;
+            }
+
+            if let None = self.find_parent(z, x, y) {
+                panic!("Parent tile not found");
+            }
+        } else {
             panic!("Parent tile not found");
         }
 
-        // if we found a parent tile containing the original geometry, we can drill down from it
-        let parent = it.expect("must exist");
-
-        // drill down parent tile up to the requested one
-        self.split_tile(
-            &parent.source_features,
-            parent.z,
-            parent.x,
-            parent.y,
-            z,
-            x,
-            y,
-        );
-
-        it = self.tiles.get(&id);
-
-        if let Some(tile) = it {
-            return &tile.tile;
-        }
-
-        it = self.find_parent(z, x, y);
-        if it.is_none() {
-            panic!("Parent tile not found");
-        }
 
         return &EMPTY_TILE;
     }
+
 
     pub fn get_internal_tiles(&self) -> &HashMap<u64, InternalTile> {
         return &self.tiles;
@@ -241,44 +238,41 @@ impl GeoJSONVT {
         let z2: f64 = (1u32 << z) as f64;
         let id = to_id(z, x, y);
 
-        let mut it = self.tiles.get_mut(&id);
-
-        if it.is_none() {
-            let tolerance = if z == self.options.max_zoom {
-                0.
-            } else {
-                self.options.tile.tolerance / (z2 * self.options.tile.extent as f64)
-            };
-
-            it = Some(match self.tiles.entry(id) {
-                Entry::Occupied(mut entry) => entry.get_mut(),
-                Entry::Vacant(entry) => {
-                    entry.insert(InternalTile::new(
-                        features,
-                        z,
-                        x,
-                        y,
-                        self.options.tile.extent,
-                        tolerance,
-                        self.options.tile.line_metrics,
-                    ))
-                }
-            });
-
-
-            self.stats.insert(
-                z,
-                if self.stats.contains_key(&z) {
-                    self.stats[&z] + 1
+        match self.tiles.entry(id) {
+            Entry::Occupied(_) => {}
+            Entry::Vacant(entry) => {
+                let tolerance = if z == self.options.max_zoom {
+                    0.
                 } else {
-                    1
-                },
-            );
-            self.total += 1;
-            // printf("tile z%i-%i-%i\n", z, x, y);
-        }
+                    self.options.tile.tolerance / (z2 * self.options.tile.extent as f64)
+                };
 
-        let tile = it.expect("can no longer be None");
+
+                entry.insert(InternalTile::new(
+                    features,
+                    z,
+                    x,
+                    y,
+                    self.options.tile.extent,
+                    tolerance,
+                    self.options.tile.line_metrics,
+                ));
+
+                self.stats.insert(
+                    z,
+                    if self.stats.contains_key(&z) {
+                        self.stats[&z] + 1
+                    } else {
+                        1
+                    },
+                );
+                self.total += 1;
+                // printf("tile z%i-%i-%i\n", z, x, y);
+            }
+        };
+
+
+        let tile = self.tiles.get_mut(&id).expect("can no longer be None");
 
         if features.is_empty() {
             return;
@@ -403,7 +397,7 @@ impl GeoJSONVT {
         );
 
         // if we sliced further down, no need to keep source geometry
-        tile.source_features = Vec::new();
+        // TODO borrow checker readd tile.source_features = Vec::new();
     }
 }
 

@@ -138,9 +138,9 @@ pub fn convert(features: &FeatureCollection, tolerance: f64, generate_id: bool) 
     projected.reserve(features.features.len());
     let mut genId: u64 = 0;
     for feature in features {
-        let mut featureId = &feature.id;
+        let mut featureId = feature.id.clone();
         if generate_id {
-            featureId = &Some(Id::Number(Number::from(genId)));
+            featureId = Some(Id::Number(Number::from(genId)));
             genId= genId +1;
         }
         

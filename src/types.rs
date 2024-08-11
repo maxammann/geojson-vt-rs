@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use euclid::{Point2D, UnknownUnit};
+use geojson::{JsonObject, JsonValue};
 
 use crate::BBox;
 
@@ -130,7 +131,7 @@ pub type VtMultiPolygon = Vec<VtPolygon>;
 #[derive(Clone, PartialEq)]
 pub struct VtFeature {
     pub geometry: VtGeometry,
-    pub properties: HashMap<String, geojson::JsonValue>,
+    pub properties: JsonObject,
     pub id: Option<geojson::feature::Id>,
     pub bbox: BBox,
     pub num_points: u32,
@@ -139,7 +140,7 @@ pub struct VtFeature {
 impl VtFeature {
     pub fn new(
         geom: VtGeometry,
-        props: HashMap<String, geojson::JsonValue>,
+        props: JsonObject,
         id: Option<geojson::feature::Id>,
     ) -> Self {
         let mut feature = Self {
