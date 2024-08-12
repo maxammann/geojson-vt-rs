@@ -67,7 +67,7 @@ pub fn to_id(z: u8, x: u32, y: u32) -> u64 {
     return (((1u64 << z as u64) * y as u64 + x as u64) * 32) + z as u64;
 }
 
-fn geojson_to_feature_collection(geojson: &GeoJson)-> FeatureCollection {
+fn geojson_to_feature_collection(geojson: &GeoJson) -> FeatureCollection {
     // TODO cleanup this conversion
     match geojson {
         GeoJson::Geometry(geom) => FeatureCollection {
@@ -81,7 +81,7 @@ fn geojson_to_feature_collection(geojson: &GeoJson)-> FeatureCollection {
             }],
             foreign_members: None,
         },
-        GeoJson::Feature(feature) =>FeatureCollection {
+        GeoJson::Feature(feature) => FeatureCollection {
             bbox: None,
             features: vec![feature.clone()],
             foreign_members: None,

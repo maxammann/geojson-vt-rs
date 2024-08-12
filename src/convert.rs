@@ -1,5 +1,8 @@
 use crate::simplify::{simplify, simplify_wrapper};
-use crate::types::{VtEmpty, VtFeature, VtFeatures, VtGeometry, VtLineString, VtLinearRing, VtMultiLineString, VtMultiPoint, VtMultiPolygon, VtPoint, VtPolygon, VtGeometryCollection};
+use crate::types::{
+    VtEmpty, VtFeature, VtFeatures, VtGeometry, VtGeometryCollection, VtLineString, VtLinearRing,
+    VtMultiLineString, VtMultiPoint, VtMultiPolygon, VtPoint, VtPolygon,
+};
 use crate::{LinearRingType, MultiLineStringType, MultiPointType, MultiPolygonType};
 use euclid::approxeq::ApproxEq;
 use geojson::feature::Id;
@@ -98,7 +101,9 @@ impl Project {
             Value::MultiPolygon(value) => {
                 VtGeometry::MultiPolygon(self.project_multi_polygon(value))
             }
-            Value::GeometryCollection(value) =>    VtGeometry::GeometryCollection(self.project_geometry_collection(value))
+            Value::GeometryCollection(value) => {
+                VtGeometry::GeometryCollection(self.project_geometry_collection(value))
+            }
         }
     }
 
@@ -163,7 +168,12 @@ pub fn convert(features: &FeatureCollection, tolerance: f64, generate_id: bool) 
 
         let feature = VtFeature::new(
             project.project_geometry(&feature.geometry.as_ref().unwrap()),
-            feature.properties.clone().unwrap_or_default().into_iter().collect(), // TODO is this unwrapping oke?
+            feature
+                .properties
+                .clone()
+                .unwrap_or_default()
+                .into_iter()
+                .collect(), // TODO is this unwrapping oke?
             featureId.clone(),
         );
         if let Some(feature) = feature {

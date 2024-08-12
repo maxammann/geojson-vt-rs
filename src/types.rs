@@ -218,7 +218,7 @@ impl VtFeature {
             geometry: geom,
             properties: props,
             id,
-            bbox: Default::default(),
+            bbox: BBox::new(Point2D::new(2., 1.), Point2D::new(-1., 0.)),
             num_points: 0,
         };
         feature.process_geometry();

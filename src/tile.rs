@@ -86,11 +86,15 @@ impl InternalTile {
             _tile.tile.num_points += feature.num_points;
 
             // TODO Verify if this is correct
-            _tile.add_geometry_feature(geom, if props.is_empty() {
-                None
-            } else {
-                Some(props.clone())
-            }, id);
+            _tile.add_geometry_feature(
+                geom,
+                if props.is_empty() {
+                    None
+                } else {
+                    Some(props.clone())
+                },
+                id,
+            );
 
             _tile.bbox.min.x = feature.bbox.min.x.min(_tile.bbox.min.x);
             _tile.bbox.min.y = feature.bbox.min.y.min(_tile.bbox.min.y);
@@ -103,7 +107,12 @@ impl InternalTile {
 }
 
 impl InternalTile {
-    fn add_geometry_feature(&mut self, geom: &VtGeometry, props: Option<JsonObject>, id: &Option<Id>) {
+    fn add_geometry_feature(
+        &mut self,
+        geom: &VtGeometry,
+        props: Option<JsonObject>,
+        id: &Option<Id>,
+    ) {
         match geom {
             VtGeometry::Empty(empty) => self.add_empty_feature(empty, props, id),
             VtGeometry::Point(point) => self.add_point_feature(point, props, id),
@@ -177,13 +186,29 @@ impl InternalTile {
         if !new_line.is_empty() {
             if self.line_metrics {
                 let mut newProps = props.unwrap_or_default();
+                let start = line.seg_start / line.dist;
                 newProps.insert(
                     "mapbox_clip_start".to_string(),
-                    JsonValue::Number(Number::from_f64(line.seg_start / line.dist).unwrap()),
+                    if start.fract() == 0.0 {
+                        JsonValue::Number(Number::from(start as i64))
+                    } else {
+                        JsonValue::Number(Number::from_f64(start).unwrap())
+                    }
                 );
+                let end = line.seg_end / line.dist;
+
+                println!("segStart {:.70}", line.seg_start);
+                println!("start    {:.70}", start);
+                println!("segEnd   {:.70}", line.seg_end);
+                println!("end      {:.70}", end);
+                println!("dist     {:.70}", line.dist);
                 newProps.insert(
                     "mapbox_clip_end".to_string(),
-                    JsonValue::Number(Number::from_f64(line.seg_end / line.dist).unwrap()),
+                    if end.fract() == 0.0 {
+                        JsonValue::Number(Number::from(end as i64))
+                    } else {
+                        JsonValue::Number(Number::from_f64(end).unwrap())
+                    }
                 );
                 self.tile.features.features.push(Feature {
                     bbox: None,
@@ -229,7 +254,12 @@ impl InternalTile {
             }),
         }
     }
-    fn add_polygon_feature(&mut self, value: &VtPolygon, props: Option<JsonObject>, id: &Option<Id>) {
+    fn add_polygon_feature(
+        &mut self,
+        value: &VtPolygon,
+        props: Option<JsonObject>,
+        id: &Option<Id>,
+    ) {
         let new_polygon = self.transform_polygon(value);
         if !new_polygon.is_empty() {
             self.tile.features.features.push(Feature {

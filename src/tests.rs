@@ -1,24 +1,26 @@
-use std::collections::HashMap;
 use crate::clip::Clipper;
 use crate::simplify::{simplify, simplify_wrapper};
 use crate::tile::EMPTY_TILE;
 use crate::types::{
     VtGeometry, VtLineString, VtLinearRing, VtMultiLineString, VtMultiPoint, VtPoint, VtPolygon,
 };
-use crate::{convert, geojson_to_tile, GeoJSONVT, LinearRingType, MultiLineStringType, Options, TileOptions};
+use crate::{
+    convert, geojson_to_tile, GeoJSONVT, LinearRingType, MultiLineStringType, Options, TileOptions,
+};
 use euclid::approxeq::ApproxEq;
 use geojson::feature::Id;
 use geojson::{
     FeatureCollection, GeoJson, Geometry, JsonObject, JsonValue, LineStringType, PointType,
     PolygonType, Position,
 };
+use serde::de::Unexpected::Str;
 use serde_json::{Number, Value};
+use std::collections::HashMap;
 use std::f64::consts::PI;
-use std::fmt;
+use std::{fmt, fs};
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::str::FromStr;
-use serde::de::Unexpected::Str;
 
 macro_rules! points {
     // Match a block containing tuples separated by commas
@@ -44,7 +46,8 @@ fn ulps_eq(it: &f64, other: &f64, max_ulps: u32) -> bool {
     let int_self: i64 = unsafe { std::mem::transmute(*it) };
     let int_other: i64 = unsafe { std::mem::transmute(*other) };
 
-    i64::abs(int_self - int_other) < max_ulps as i64
+    let a = i64::abs(int_self - int_other);
+    a < max_ulps as i64
 }
 
 fn multi_line_string_eq((a, b): (&VtMultiLineString, &VtMultiLineString)) -> bool {
@@ -73,7 +76,10 @@ fn parseJSONTiles(tiles: JsonValue) -> HashMap<String, FeatureCollection> {
         panic!("not a valid tiles file");
     };
 
-    tiles.into_iter().map(|(key, value)| (key, parseJSONTile(value))).collect()
+    tiles
+        .into_iter()
+        .map(|(key, value)| (key, parseJSONTile(value)))
+        .collect()
 }
 
 fn parseJSONTile(tile: JsonValue) -> FeatureCollection {
@@ -96,10 +102,9 @@ fn parseJSONTile(tile: JsonValue) -> FeatureCollection {
         if let Some(JsonValue::Object(tile_feature)) = &feature.get("tags") {
             if tile_feature.is_empty() {
                 feat.properties = None;
-            }else {
+            } else {
                 feat.properties = Some(tile_feature.clone());
             }
-       
 
             for (name, value) in tile_feature.iter() {
                 /*match value {
@@ -152,7 +157,6 @@ fn parseJSONTile(tile: JsonValue) -> FeatureCollection {
             let geomType = tile_type.as_i64().unwrap();
             // point geometry
             if (geomType == 1) {
-                
                 if tile_geom.len() == 1 {
                     let pt = tile_geom.first().unwrap();
                     assert_eq!(pt.as_array().unwrap().len(), 2);
@@ -170,7 +174,6 @@ fn parseJSONTile(tile: JsonValue) -> FeatureCollection {
                     }
                     feat.geometry = Some(Geometry::new(geojson::Value::MultiPoint(points)))
                 }
-                
 
                 // linestring geometry
             } else if (geomType == 2) {
@@ -197,7 +200,7 @@ fn parseJSONTile(tile: JsonValue) -> FeatureCollection {
                         multi_line.push(line_string);
                     }
                 }
-                
+
                 if (is_multi) {
                     feat.geometry =
                         Some(Geometry::new(geojson::Value::MultiLineString(multi_line)));
@@ -733,10 +736,13 @@ fn get_tile_projection() {
     }
 }
 
-
-fn gen_tiles(data: &str, max_zoom: u8, max_points: u32, line_metrics: bool) -> HashMap<String, FeatureCollection> {
-    let geojson = GeoJson::from_str(data)
-        .unwrap();
+fn gen_tiles(
+    data: &str,
+    max_zoom: u8,
+    max_points: u32,
+    line_metrics: bool,
+) -> HashMap<String, FeatureCollection> {
+    let geojson = GeoJson::from_str(data).unwrap();
     let mut index = GeoJSONVT::from_geojson(
         &geojson,
         &Options {
@@ -772,7 +778,13 @@ struct Arguments {
 }
 
 impl Arguments {
-    fn new(input_file: &str, expected_file: &str, max_zoom: u8, max_points: u32, line_metrics: bool) -> Self {
+    fn new(
+        input_file: &str,
+        expected_file: &str,
+        max_zoom: u8,
+        max_points: u32,
+        line_metrics: bool,
+    ) -> Self {
         Arguments {
             input_file: input_file.to_string(),
             expected_file: expected_file.to_string(),
@@ -786,25 +798,42 @@ impl Arguments {
 // Implementing the Display trait for Arguments
 impl fmt::Display for Arguments {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} ({}, {}, {})", self.input_file, self.max_zoom, self.max_points, self.line_metrics)
+        write!(
+            f,
+            "{} ({}, {}, {})",
+            self.input_file, self.max_zoom, self.max_points, self.line_metrics
+        )
     }
 }
-
-
-// TODO #[test]
-//fn gen_tiles_invalid_geojson() {
-//    gen_tiles("{\"type\": \"Pologon\"}", 0, 10000, false);
-//}
 
 #[test]
 fn tile_tests() {
     let tests = [
-     // TODO  Arguments::new( "fixtures/us-states.json", "fixtures/us-states-tiles.json", 7, 200, false ),
-     //  TODO Arguments::new( "fixtures/dateline.json", "fixtures/dateline-tiles.json", 7, 200, false ),
-    // TODO    Arguments::new( "fixtures/dateline.json", "fixtures/dateline-metrics-tiles.json", 0, 10000, true ),
-        Arguments::new( "fixtures/feature.json", "fixtures/feature-tiles.json", 0, 10000, false),
-      Arguments::new( "fixtures/collection.json", "fixtures/collection-tiles.json" ,0, 10000, false),
-        Arguments::new( "fixtures/single-geom.json", "fixtures/single-geom-tiles.json",0, 10000, false )
+        Arguments::new( "fixtures/us-states.json", "fixtures/us-states-tiles.json", 7, 200, false ),
+        Arguments::new( "fixtures/dateline.json", "fixtures/dateline-tiles.json", 7, 200, false ),
+        Arguments::new( "fixtures/dateline.json", "fixtures/dateline-metrics-tiles.json", 0, 10000, true ),
+        Arguments::new(
+            "fixtures/feature.json",
+            "fixtures/feature-tiles.json",
+            0,
+            10000,
+            false,
+        ),
+        // In comparison to the C++ code we fixed the loading of MultiPoints in the parseJSONTile helper
+        Arguments::new(
+            "fixtures/collection.json",
+            "fixtures/collection-tiles.json",
+            0,
+            10000,
+            false,
+        ),
+        Arguments::new(
+            "fixtures/single-geom.json",
+            "fixtures/single-geom-tiles.json",
+            0,
+            10000,
+            false,
+        ),
     ];
 
     for test in tests {
@@ -812,8 +841,18 @@ fn tile_tests() {
         let mut data = String::new();
         file.read_to_string(&mut data).unwrap();
         let actual = gen_tiles(&data, test.max_zoom, test.max_points, test.line_metrics);
-        let expected = parseJSONTiles(serde_json::from_reader(File::open(&test.expected_file).unwrap()).unwrap());
+        let expected = parseJSONTiles(
+            serde_json::from_reader(File::open(&test.expected_file).unwrap()).unwrap(),
+        );
+        
+        for (key, value) in &actual {
+            fs::write(format!("us/actual/{}.json", key), value.clone().to_string()).unwrap();
+        }
 
+        for (key, value) in &expected {
+            fs::write(format!("us/expected/{}.json", key), value.clone().to_string()).unwrap();
+        }
+ 
         assert_eq!(expected, actual);
     }
 }
@@ -823,14 +862,176 @@ fn geojson_to_tile_simple() {
     let geojson = GeoJson::from_reader(BufReader::new(
         File::open("fixtures/single-tile.json").unwrap(),
     ))
-        .unwrap();
+    .unwrap();
 
-
-    let tile = geojson_to_tile(&geojson, 12, 1171, 1566, &TileOptions::default(), false, false);
+    let tile = geojson_to_tile(
+        &geojson,
+        12,
+        1171,
+        1566,
+        &TileOptions::default(),
+        false,
+        false,
+    );
 
     assert_eq!(tile.features.features.len(), 1);
-    let props = tile.features.features.get(0).as_ref().unwrap().properties.as_ref().unwrap();
+    let props = tile
+        .features
+        .features
+        .get(0)
+        .as_ref()
+        .unwrap()
+        .properties
+        .as_ref()
+        .unwrap();
     let name = props.get("name").unwrap();
     let str = name.as_str().unwrap();
     assert_eq!(str, "P Street Northwest - Massachusetts Avenue Northwest");
+}
+#[test]
+fn geojson_to_tile_clips() {
+    let geojson = GeoJson::from_reader(BufReader::new(
+        File::open("fixtures/us-states.json").unwrap(),
+    ))
+    .unwrap();
+
+    let tile = geojson_to_tile(
+        &geojson,
+        12,
+        1171,
+        1566,
+        &TileOptions::default(),
+        false,
+        true,
+    );
+
+    assert_eq!(tile.features.features.len(), 2);
+    let props = tile
+        .features
+        .features
+        .get(0)
+        .as_ref()
+        .unwrap()
+        .properties
+        .as_ref()
+        .unwrap();
+    let name = props.get("name").unwrap();
+    let str = name.as_str().unwrap();
+    assert_eq!(str, "District of Columbia");
+}
+
+#[test]
+fn geojson_to_tile_metrics() {
+    let geojson = GeoJson::from_reader(BufReader::new(
+        File::open("fixtures/single-tile.json").unwrap(),
+    ))
+    .unwrap();
+
+    let options = TileOptions {
+        buffer: 64,
+        tolerance: 3.,
+        line_metrics: true,
+        ..TileOptions::default()
+    };
+
+    let kEpsilon = 1e-5;
+
+    let tileLeft = geojson_to_tile(&geojson, 13, 2342, 3133, &options, false, false);
+    assert_eq!(tileLeft.features.features.len(), 1);
+
+    let tileRight = geojson_to_tile(&geojson, 13, 2343, 3133, &options, false, false);
+    assert_eq!(tileRight.features.features.len(), 1);
+
+    let leftProps = tileLeft
+        .features
+        .features
+        .get(0)
+        .as_ref()
+        .unwrap()
+        .properties
+        .as_ref()
+        .unwrap();
+    let leftClipStart = leftProps
+        .get("mapbox_clip_start")
+        .unwrap()
+        .as_f64()
+        .unwrap();
+    assert!(ulps_eq(&leftClipStart, &0.0, 4));
+    let leftClipEnd = leftProps.get("mapbox_clip_end").unwrap().as_f64().unwrap();
+    assert!(leftClipEnd.approx_eq_eps(&0.42103, &kEpsilon));
+
+    let rightProps = tileRight
+        .features
+        .features
+        .get(0)
+        .as_ref()
+        .unwrap()
+        .properties
+        .as_ref()
+        .unwrap();
+    let rightClipStart = rightProps
+        .get("mapbox_clip_start")
+        .unwrap()
+        .as_f64()
+        .unwrap();
+    assert!(rightClipStart.approx_eq_eps(&0.40349, &kEpsilon));
+    let rightClipEnd = rightProps.get("mapbox_clip_end").unwrap().as_f64().unwrap();
+    assert!(ulps_eq(&rightClipEnd, &1.0, 4));
+}
+
+#[test]
+fn geojson_to_tile_clip_vertex_on_tile_border() {
+    let data = r#"{
+        "type": "Feature",
+        "geometry": {
+            "type": "LineString",
+            "coordinates":[
+                [-77.031373697916663,38.895516493055553],
+                [-77.01416015625,38.887532552083336],
+                [-76.99,38.87]
+            ]
+        }
+    }"#; // The second node is exactly on the (13, 2344, 3134) tile border.
+
+    let geojson = GeoJson::from_str(data).unwrap();
+
+    let options = Options {
+        tile: TileOptions {
+            extent: 8192,
+            buffer: 2048,
+            line_metrics: true,
+            ..TileOptions::default()
+        },
+        ..Options::default()
+    };
+
+    let kEpsilon = 1e-5;
+
+    let mut index = GeoJSONVT::from_geojson(&geojson, &options);
+
+    let tile = index.get_tile(13, 2344, 3134);
+    assert!(!tile.features.features.is_empty());
+
+    let expected: LineStringType = LineStringType::from(&[vec![-2048., 2747.], vec![408., 5037.]]);
+
+    let actual = match &tile.features.features[0].geometry.as_ref().unwrap().value {
+        geojson::Value::LineString(line_string) => line_string,
+        _ => panic!("must be linestring"),
+    };
+    assert_eq!(actual, &expected);
+
+    // Check line metrics
+    let props = tile
+        .features
+        .features
+        .get(0)
+        .as_ref()
+        .unwrap()
+        .properties
+        .as_ref()
+        .unwrap();
+    let clipStart1 = props.get("mapbox_clip_start").unwrap().as_f64().unwrap();
+    let clipEnd1 = props.get("mapbox_clip_end").unwrap().as_f64().unwrap();
+    assert!(0.660622.approx_eq_eps(&clipStart1, &kEpsilon));
+    assert!(1.0.approx_eq_eps(&clipEnd1, &kEpsilon));
 }
