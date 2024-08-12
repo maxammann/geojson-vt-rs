@@ -21,54 +21,51 @@ pub enum VtGeometry {
 }
 
 impl VtGeometry {
-
     pub fn point(self) -> Option<VtPoint> {
         match self {
             VtGeometry::Point(value) => Some(value),
-            _ => None
+            _ => None,
         }
     }
 
     pub fn multi_point(self) -> Option<VtMultiPoint> {
         match self {
             VtGeometry::MultiPoint(value) => Some(value),
-            _ => None
+            _ => None,
         }
     }
-
 
     pub fn line_string(self) -> Option<VtLineString> {
         match self {
             VtGeometry::LineString(value) => Some(value),
-            _ => None
+            _ => None,
         }
     }
     pub fn multi_line_string(self) -> Option<VtMultiLineString> {
         match self {
             VtGeometry::MultiLineString(value) => Some(value),
-            _ => None
+            _ => None,
         }
     }
     pub fn polygon(self) -> Option<VtPolygon> {
         match self {
             VtGeometry::Polygon(value) => Some(value),
-            _ => None
+            _ => None,
         }
     }
 
     pub fn multi_polygon(self) -> Option<VtMultiPolygon> {
         match self {
             VtGeometry::MultiPolygon(value) => Some(value),
-            _ => None
+            _ => None,
         }
     }
     pub fn geometry_collection(self) -> Option<VtGeometryCollection> {
         match self {
             VtGeometry::GeometryCollection(value) => Some(value),
-            _ => None
+            _ => None,
         }
     }
-
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -234,7 +231,10 @@ impl VtFeature {
     }
 }
 
-pub(crate) fn for_each_point<F>(geometry: &mut VtGeometry, mut f: F) where F: FnMut(&mut VtPoint) {
+pub(crate) fn for_each_point<F>(geometry: &mut VtGeometry, f: &mut F)
+where
+    F: FnMut(&mut VtPoint),
+{
     // TODO verify this translation
     match geometry {
         VtGeometry::Empty(_) => {}
@@ -272,13 +272,18 @@ pub(crate) fn for_each_point<F>(geometry: &mut VtGeometry, mut f: F) where F: Fn
                 }
             }
         }
-        VtGeometry::GeometryCollection(_) => unimplemented!(),
+        VtGeometry::GeometryCollection(collection) => {
+            // TODO: verify if translated correctly
+            for geometry in collection {
+                for_each_point(geometry, f)
+            }
+        }
     }
 }
 
 impl VtFeature {
     fn process_geometry(&mut self) {
-        let f = |point: &mut VtPoint| {
+        let mut f = |point: &mut VtPoint| {
             self.bbox.min.x = (point.x).min(self.bbox.min.x);
             self.bbox.min.y = (point.y).min(self.bbox.min.y);
             self.bbox.max.x = (point.x).max(self.bbox.max.x);
@@ -286,7 +291,7 @@ impl VtFeature {
             self.num_points = self.num_points + 1;
         };
         // TODO verify this translation
-        for_each_point(&mut self.geometry, f)
+        for_each_point(&mut self.geometry, &mut f)
     }
 }
 

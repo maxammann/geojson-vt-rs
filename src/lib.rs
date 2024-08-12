@@ -4,7 +4,10 @@ use crate::tile::{InternalTile, Tile, EMPTY_TILE};
 use crate::types::VtFeatures;
 use crate::wrap::wrap;
 use euclid::{Point2D, UnknownUnit};
-use geojson::{Feature, FeatureCollection, GeoJson, Geometry, JsonObject, LineStringType, PointType, PolygonType};
+use geojson::{
+    Feature, FeatureCollection, GeoJson, Geometry, JsonObject, LineStringType, PointType,
+    PolygonType,
+};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
@@ -64,6 +67,29 @@ pub fn to_id(z: u8, x: u32, y: u32) -> u64 {
     return (((1u64 << z as u64) * y as u64 + x as u64) * 32) + z as u64;
 }
 
+fn geojson_to_feature_collection(geojson: &GeoJson)-> FeatureCollection {
+    // TODO cleanup this conversion
+    match geojson {
+        GeoJson::Geometry(geom) => FeatureCollection {
+            bbox: None,
+            features: vec![Feature {
+                bbox: None,
+                geometry: Some(geom.clone()),
+                id: None,
+                properties: None,
+                foreign_members: None,
+            }],
+            foreign_members: None,
+        },
+        GeoJson::Feature(feature) =>FeatureCollection {
+            bbox: None,
+            features: vec![feature.clone()],
+            foreign_members: None,
+        },
+        GeoJson::FeatureCollection(features) => features.clone(),
+    }
+}
+
 pub fn geojson_to_tile(
     geojson: &GeoJson,
     z: u8,
@@ -73,11 +99,7 @@ pub fn geojson_to_tile(
     wrap_: bool,
     clip_: bool,
 ) -> Tile {
-    let features_ = match geojson {
-        GeoJson::Geometry(geometry) => unimplemented!("not yet implemented"),
-        GeoJson::Feature(feature) => unimplemented!("not yet implemented"),
-        GeoJson::FeatureCollection(collection) => collection,
-    };
+    let features_ = &geojson_to_feature_collection(geojson);
     let z2 = 1u32 << z;
     let tolerance = (options.tolerance / options.extent as f64) / z2 as f64;
     let mut features = convert(features_, tolerance, false);
@@ -128,24 +150,8 @@ pub struct GeoJSONVT {
 }
 
 impl GeoJSONVT {
-
     pub fn from_geojson(geojson: &GeoJson, options: &Options) -> Self {
-        // TODO cleanup this conversion
-        let collection = match geojson {
-            GeoJson::Geometry(geom) => FeatureCollection {
-                bbox: None,
-                features: vec![Feature {
-                    bbox: None,
-                    geometry: Some(geom.clone()),
-                    id: None,
-                    properties: Some(JsonObject::new()),
-                    foreign_members: None,
-                }],
-                foreign_members: None,
-            },
-            GeoJson::Feature(_) => unimplemented!(),
-            GeoJson::FeatureCollection(features) => features.clone(),
-        };
+        let collection = geojson_to_feature_collection(geojson);
         Self::new(&collection, options)
     }
     pub fn new(features_: &FeatureCollection, options: &Options) -> Self {
@@ -299,6 +305,7 @@ impl GeoJSONVT {
             if z == self.options.index_max_zoom
                 || tile.tile.num_points <= self.options.index_max_points
             {
+                println!("reached max zoom");
                 tile.source_features = features.clone();
                 return;
             }
@@ -306,13 +313,14 @@ impl GeoJSONVT {
             // drilldown to a specific tile;
             // stop tiling if we reached base zoom
             if z == self.options.max_zoom {
+                println!("reached base zoom");
                 return;
             }
 
             // stop tiling if it's our target tile zoom
             if z == cz {
                 tile.source_features = features.clone();
-                //println!("target tile zoom");
+                println!("target tile zoom");
                 return;
             }
 
@@ -321,7 +329,7 @@ impl GeoJSONVT {
             let a = (cx as f64 / m).floor() as u32;
             let b = (cy as f64 / m).floor() as u32;
             if x != a || y != b {
-                //println!(" not an ancestor");
+                println!("not an ancestor");
                 tile.source_features = features.clone();
                 return;
             }

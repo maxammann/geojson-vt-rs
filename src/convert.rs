@@ -1,16 +1,13 @@
 use crate::simplify::{simplify, simplify_wrapper};
-use crate::types::{
-    VtEmpty, VtFeature, VtFeatures, VtGeometry, VtLineString, VtLinearRing, VtMultiLineString,
-    VtMultiPoint, VtMultiPolygon, VtPoint, VtPolygon,
-};
+use crate::types::{VtEmpty, VtFeature, VtFeatures, VtGeometry, VtLineString, VtLinearRing, VtMultiLineString, VtMultiPoint, VtMultiPolygon, VtPoint, VtPolygon, VtGeometryCollection};
 use crate::{LinearRingType, MultiLineStringType, MultiPointType, MultiPolygonType};
+use euclid::approxeq::ApproxEq;
 use geojson::feature::Id;
 use geojson::{
     Feature, FeatureCollection, Geometry, LineStringType, PointType, PolygonType, Value,
 };
 use serde_json::Number;
 use std::f64::consts::PI;
-use euclid::approxeq::ApproxEq;
 
 pub struct Project {
     pub tolerance: f64,
@@ -24,7 +21,9 @@ impl Project {
     pub fn project_point(&self, p: PointType) -> VtPoint {
         let sine = (p[1] * PI / 180.).sin();
         let x = p[0] / 360. + 0.5;
-        let y = (0.5 - 0.25 * ((1. + sine) / (1. - sine)).ln() / PI).min(1.0).max(0.0);
+        let y = (0.5 - 0.25 * ((1. + sine) / (1. - sine)).ln() / PI)
+            .min(1.0)
+            .max(0.0);
         return VtPoint { x, y, z: 0.0 };
     }
 
@@ -99,7 +98,7 @@ impl Project {
             Value::MultiPolygon(value) => {
                 VtGeometry::MultiPolygon(self.project_multi_polygon(value))
             }
-            Value::GeometryCollection(value) => unimplemented!(),
+            Value::GeometryCollection(value) =>    VtGeometry::GeometryCollection(self.project_geometry_collection(value))
         }
     }
 
@@ -138,6 +137,15 @@ impl Project {
         }
         return result;
     }
+    fn project_geometry_collection(&self, vector: &Vec<Geometry>) -> VtGeometryCollection {
+        // TODO: verify if translated correctly
+        let mut result = Vec::new();
+        result.reserve(vector.len());
+        for e in vector {
+            result.push(self.project_geometry(e));
+        }
+        return result;
+    }
 }
 
 pub fn convert(features: &FeatureCollection, tolerance: f64, generate_id: bool) -> VtFeatures {
@@ -155,7 +163,7 @@ pub fn convert(features: &FeatureCollection, tolerance: f64, generate_id: bool) 
 
         let feature = VtFeature::new(
             project.project_geometry(&feature.geometry.as_ref().unwrap()),
-            feature.properties.clone().unwrap().into_iter().collect(),
+            feature.properties.clone().unwrap_or_default().into_iter().collect(), // TODO is this unwrapping oke?
             featureId.clone(),
         );
         if let Some(feature) = feature {

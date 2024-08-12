@@ -100,7 +100,6 @@ impl<const I: usize> Clipper<I> {
         for geometry in geometries {
             // TODO: verify if translated correctly
             result.push(self.clip_geometry(geometry));
-            unimplemented!()
         }
         return VtGeometry::GeometryCollection(result);
     }
@@ -422,8 +421,11 @@ pub fn clip<const I: usize>(
                             );
                         }
                     } else {
-                        clipped
-                            .push(VtFeature::new(clipped_geom, props.clone(), id.clone()).unwrap());
+                        if let Some(feature) =
+                            VtFeature::new(clipped_geom, props.clone(), id.clone())
+                        {
+                            clipped.push(feature);
+                        }
                     }
                 }
                 _ => {

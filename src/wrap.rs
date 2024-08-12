@@ -5,10 +5,10 @@ use crate::types::{for_each_point, VtFeatures, VtGeometry, VtPoint};
 pub fn shift_coords(features: &mut VtFeatures, offset: f64) {
     for feature in features {
         // TODO verify this translation
-        let f = |point: &mut VtPoint| {
+        let mut f = |point: &mut VtPoint| {
             point.x += offset;
         };
-        for_each_point(&mut feature.geometry, f);
+        for_each_point(&mut feature.geometry, &mut f);
 
         feature.bbox.min.x += offset;
         feature.bbox.max.x += offset;
