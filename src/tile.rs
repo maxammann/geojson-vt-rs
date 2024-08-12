@@ -97,7 +97,7 @@ impl InternalTile {
         &mut self,
         geom: &VtGeometry,
         props: &JsonObject,
-        id: &Option<geojson::feature::Id>,
+        id: &Option<Id>,
     ) {
         match geom {
             VtGeometry::Empty(empty) => self.add_empty_feature(empty, props, id),

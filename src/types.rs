@@ -8,7 +8,7 @@ use crate::BBox;
 pub type VtEmpty = ();
 pub type VtGeometryCollection = Vec<VtGeometry>;
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum VtGeometry {
     Empty(VtEmpty),
     Point(VtPoint),
@@ -68,29 +68,40 @@ impl<const I: usize> GetCoordinate<I> for Point2D<f64, UnknownUnit> {
     }
 }
 
-// Calculation of progress along a line
-pub fn calc_progress_x(a: &VtPoint, b: &VtPoint, x: f64) -> f64 {
-    (x - a.x) / (b.x - a.x)
-}
 
-pub fn calc_progress_y(a: &VtPoint, b: &VtPoint, y: f64) -> f64 {
-    (y - a.y) / (b.y - a.y)
+
+
+// Calculation of progress along a line
+pub fn calc_progress<const I: usize>(a: &VtPoint, b: &VtPoint, v: f64) -> f64 {
+    match I {
+        0 =>    (v - a.x) / (b.x - a.x),
+        1 =>    (v - a.y) / (b.y - a.y),
+        _ => {
+            panic!("calc_progress is only implemented for I = 0 and I = 1")
+        }
+    }
 }
 
 // Intersection calculation based on linear interpolation
-pub fn intersect_x(a: &VtPoint, b: &VtPoint, x: f64, t: f64) -> VtPoint {
-    let y = (b.y - a.y) * t + a.y;
-    VtPoint::new(x, y, 1.0)
-}
-
-pub fn intersect_y(a: &VtPoint, b: &VtPoint, y: f64, t: f64) -> VtPoint {
-    let x = (b.x - a.x) * t + a.x;
-    VtPoint::new(x, y, 1.0)
+pub fn intersect<const I: usize>(a: &VtPoint, b: &VtPoint, v: f64, t: f64) -> VtPoint {
+    match I {
+        0 =>    {
+            let y = (b.y - a.y) * t + a.y;
+            VtPoint::new(v, y, 1.0)
+        }
+        1 =>   {
+            let x = (b.x - a.x) * t + a.x;
+            VtPoint::new(x, v, 1.0)
+        }
+        _ => {
+            panic!("calc_progress is only implemented for I = 0 and I = 1")
+        }
+    }
 }
 
 pub type VtMultiPoint = Vec<VtPoint>;
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug,Clone, PartialEq)]
 pub struct VtLineString {
     pub elements: Vec<VtPoint>,
     pub dist: f64,
@@ -109,7 +120,7 @@ impl VtLineString {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug,Clone, PartialEq)]
 pub struct VtLinearRing {
     pub elements: Vec<VtPoint>,
     pub area: f64, // polygon ring area
@@ -128,7 +139,7 @@ pub type VtMultiLineString = Vec<VtLineString>;
 pub type VtPolygon = Vec<VtLinearRing>;
 pub type VtMultiPolygon = Vec<VtPolygon>;
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VtFeature {
     pub geometry: VtGeometry,
     pub properties: JsonObject,
@@ -142,7 +153,7 @@ impl VtFeature {
         geom: VtGeometry,
         props: JsonObject,
         id: Option<geojson::feature::Id>,
-    ) -> Self {
+    ) -> Option<Self> {
         let mut feature = Self {
             geometry: geom,
             properties: props,
@@ -151,22 +162,63 @@ impl VtFeature {
             num_points: 0,
         };
         feature.process_geometry();
-        feature
+        if feature.num_points == 0 {
+            // TODO: Is this the right place to filter for empty?
+            return None
+        } else {
+            Some(feature)
+        }
     }
 }
 
 impl VtFeature {
     fn process_geometry(&mut self) {
+        
+        let mut f = |point: &VtPoint| {
+            self.bbox.min.x = (point.x).min(self.bbox.min.x);
+            self.bbox.min.y = (point.y).min(self.bbox.min.y);
+            self.bbox.max.x = (point.x).max(self.bbox.max.x);
+            self.bbox.max.y = (point.y).max(self.bbox.max.y);
+            self.num_points = self.num_points + 1;
+        };
         // TODO verify this translation
-        match &mut self.geometry {
-            VtGeometry::Point(point) => {
-                self.bbox.min.x = (point.x).min(self.bbox.min.x);
-                self.bbox.min.y = (point.y).min(self.bbox.min.y);
-                self.bbox.max.x = (point.x).max(self.bbox.max.x);
-                self.bbox.max.y = (point.y).max(self.bbox.max.y);
-                self.num_points = self.num_points + 1;
+        match &self.geometry {
+            VtGeometry::Empty(_) => {}
+            VtGeometry::Point(point) => f(point),
+            VtGeometry::MultiPoint(multi_point) => {
+                for point in multi_point {
+                    f(point)
+                }
             }
-            _ => {}
+            VtGeometry::LineString(line_string) => {
+                for point in &line_string.elements {
+                    f(point)
+                }
+            }
+            VtGeometry::MultiLineString(multi_line_string) => {
+                for line_string in multi_line_string {
+                    for point in &line_string.elements {
+                        f(point)
+                    }
+                }
+            }
+            VtGeometry::Polygon(polygon) => {
+                for line_string in polygon {
+                    for point in &line_string.elements {
+                        f(point)
+                    }
+                }
+            }
+            VtGeometry::MultiPolygon(multi_polygon) => {
+                for polygon in multi_polygon {
+                for line_string in polygon {
+                    for point in &line_string.elements {
+                        f(point)
+                    }
+                }
+                }
+            }
+            VtGeometry::GeometryCollection(_) => unimplemented!()
         }
     }
 }

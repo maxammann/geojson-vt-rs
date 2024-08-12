@@ -1,9 +1,7 @@
-use crate::types::{
-    GetCoordinate, VtEmpty, VtFeature, VtFeatures, VtGeometry, VtGeometryCollection, VtLineString,
-    VtLinearRing, VtMultiLineString, VtMultiPoint, VtMultiPolygon, VtPoint, VtPolygon,
-};
+use crate::types::{GetCoordinate, VtEmpty, VtFeature, VtFeatures, VtGeometry, VtGeometryCollection, VtLineString, VtLinearRing, VtMultiLineString, VtMultiPoint, VtMultiPolygon, VtPoint, VtPolygon, calc_progress, intersect};
 
 trait IsTrue<const B: bool> {}
+
 impl IsTrue<true> for () {}
 
 // Define a generic clipper struct templated with a constant index.
@@ -132,35 +130,191 @@ impl<const I: usize> Clipper<I> {
 
     // Mimic the clipLine function from C++
     fn clip_line(&self, line: &VtLineString, slices: &mut Vec<VtLineString>) {
-        // if line.len() < 2 {
-        //     return;
-        // }
-        // let mut slice = self.new_slice(line);
-        // for (i, window) in line.windows(2).enumerate() {
-        //     let a = &window[0];
-        //     let b = &window[1];
-        //     let is_last_seg = i == line.len() - 2;
-        //     Implement clipping logic here
-        // }
-        // if !slice.is_empty() {
-        //     slices.push(slice);
-        // }
-        todo!() // Implement this functionality based on your LineString and Vector geometry
+        let len = line.elements.len();
+        let mut lineLen = line.seg_start;
+        let mut segLen = 0.0;
+        let mut t = 0.0;
+
+        if len < 2 {
+            return;
+        }
+
+
+        let mut slice = self.new_slice(line);
+
+        for i in 0..(len - 1) {
+            let a = line.elements[i];
+            let b = line.elements[i + 1];
+            let ak = GetCoordinate::<I>::get(&a);
+            let bk = GetCoordinate::<I>::get(&b);
+            let isLastSeg = i == (len - 2);
+
+            if self.line_metrics {
+                segLen = (b.x - a.x).hypot(b.y - a.y);
+            }
+
+            if ak < self.k1 {
+                if bk > self.k2 { // ---|-----|-->
+                    t = calc_progress::<I>(&a, &b, self.k1);
+                    slice.elements.push(intersect::<I>(&a, &b, self.k1, t));
+                    if self.line_metrics {
+                        slice.seg_start = lineLen + segLen * t;
+                    }
+
+                    t = calc_progress::<I>(&a, &b, self.k2);
+                    slice.elements.push(intersect::<I>(&a, &b, self.k2, t));
+                    if self.line_metrics {
+                        slice.seg_end = lineLen + segLen * t;
+                    }
+                    slices.push(slice);
+
+                    slice = self.new_slice(line);
+                } else if bk > self.k1 { // ---|-->  |
+                    t = calc_progress::<I>(&a, &b, self.k1);
+                    slice.elements.push(intersect::<I>(&a, &b, self.k1, t));
+                    if self.line_metrics {
+                        slice.seg_start = lineLen + segLen * t;
+                    }
+                    if isLastSeg {
+                        slice.elements.push(b); // last point
+                    }
+                } else if bk == self.k1 && !isLastSeg { // --->|..  |
+                    if self.line_metrics {
+                        slice.seg_start = lineLen + segLen;
+                    }
+                    slice.elements.push(b);
+                }
+            } else if ak > self.k2 {
+                if bk < self.k1 { // <--|-----|---
+                    t = calc_progress::<I>(&a, &b, self.k2);
+                    slice.elements.push(intersect::<I>(&a, &b, self.k2, t));
+                    if self.line_metrics {
+                        slice.seg_start = lineLen + segLen * t;
+                    }
+
+                    t = calc_progress::<I>(&a, &b, self.k1);
+                    slice.elements.push(intersect::<I>(&a, &b, self.k1, t));
+                    if self.line_metrics {
+                        slice.seg_end = lineLen + segLen * t;
+                    }
+
+                    slices.push(slice);
+
+                    slice = self.new_slice(line);
+                } else if bk < self.k2 { // |  <--|---
+                    t = calc_progress::<I>(&a, &b, self.k2);
+                    slice.elements.push(intersect::<I>(&a, &b, self.k2, t));
+                    if self.line_metrics {
+                        slice.seg_start = lineLen + segLen * t;
+                    }
+                    if isLastSeg {
+                        slice.elements.push(b); // last point
+                    }
+                } else if bk == self.k2 && !isLastSeg { // |  ..|<---
+                    if self.line_metrics {
+                        slice.seg_start = lineLen + segLen;
+                    }
+                    slice.elements.push(b);
+                }
+            } else {
+                slice.elements.push(a);
+
+                if bk < self.k1 { // <--|---  |
+                    t = calc_progress::<I>(&a, &b, self.k1);
+                    slice.elements.push(intersect::<I>(&a, &b, self.k1, t));
+                    if self.line_metrics {
+                        slice.seg_end = lineLen + segLen * t;
+                    }
+                    slices.push(slice);
+                    slice = self.new_slice(line);
+                } else if bk > self.k2 { // |  ---|-->
+                    t = calc_progress::<I>(&a, &b, self.k2);
+                    slice.elements.push(intersect::<I>(&a, &b, self.k2, t));
+                    if self.line_metrics {
+                        slice.seg_end = lineLen + segLen * t;
+                    }
+                    slices.push(slice);
+                    slice = self.new_slice(line);
+                } else if isLastSeg { // | --> |
+                    slice.elements.push(b);
+                }
+            }
+
+            if self.line_metrics {
+                lineLen += segLen;
+            }
+        }
+
+        if !slice.elements.is_empty() { // add the final slice
+            if self.line_metrics {
+                slice.seg_end = lineLen;
+            }
+            slices.push(slice);
+        }
     }
 
     // Mimic the clipRing function from C++
     fn clip_ring(&self, ring: &VtLinearRing) -> VtLinearRing {
-        // let mut slice = LineString::new();
-        // slice.area = ring.area; // Assuming LineString has an area attribute
-        // for (i, window) in ring.windows(2).enumerate() {
-        //     Implement clipping logic here
-        // }
-        // Close the polygon if endpoints are not the same
-        // if !slice.is_empty() && slice[0] != slice[slice.len() - 1] {
-        //     slice.push(slice[0]);
-        // }
-        // return slice;
-        todo!() // Implement this functionality based on your LineString structure
+        let len = ring.elements.len();
+        let mut slice = VtLinearRing::new();
+        slice.area = ring.area;
+
+        if len < 2 {
+            return slice;
+        }
+
+
+        for i in 0..(len - 1) {
+            let a = ring.elements[i];
+            let b = ring.elements[i + 1];
+            let ak = GetCoordinate::<I>::get(&a);
+            let bk = GetCoordinate::<I>::get(&b);
+
+            if ak < self.k1 {
+                if bk > self.k1 {
+                    // ---|-->  |
+                    slice.elements.push(intersect::<I>(&a, &b, self.k1, calc_progress::<I>(&a, &b, self.k1)));
+                    if bk > self.k2 {
+                        // ---|-----|-->
+                        slice.elements.push(intersect::<I>(&a, &b, self.k2, calc_progress::<I>(&a, &b, self.k2)));
+                    } else if i == len - 2 {
+                        slice.elements.push(b); // last point
+                    }
+                }
+            } else if ak > self.k2 {
+                if bk < self.k2 { // |  <--|---
+                    slice.elements.push(intersect::<I>(&a, &b, self.k2, calc_progress::<I>(&a, &b, self.k2)));
+                    if bk < self.k1 // <--|-----|---
+                    {
+                        slice.elements.push(intersect::<I>(&a, &b, self.k1, calc_progress::<I>(&a, &b, self.k1)));
+                    } else if i == len - 2 {
+                        slice.elements.push(b); // last point
+                    }
+                }
+            } else {
+                // | --> |
+                slice.elements.push(a);
+                if bk < self.k1 {
+                    // <--|---  |
+                    slice.elements.push(intersect::<I>(&a, &b, self.k1, calc_progress::<I>(&a, &b, self.k1)));
+                } else if bk > self.k2 {
+
+                    // |  ---|-->
+                    slice.elements.push(intersect::<I>(&a, &b, self.k2, calc_progress::<I>(&a, &b, self.k2)));
+                }
+            }
+        }
+
+        // close the polygon if its endpoints are not the same after clipping
+        if !slice.elements.is_empty() {
+            let first = slice.elements.first();
+            let last = slice.elements.last();
+            if first != last {
+                slice.elements.push(*first.unwrap());
+            }
+        }
+
+        return slice;
     }
 }
 
@@ -207,7 +361,7 @@ pub fn clip<const I: usize>(
             // trivial reject
             continue;
         } else {
-            // TODO: verify if translated correctly
+            // TODO: verify if translated correctly - good
             let clipped_geom = Clipper::<I>::new(k1, k2, line_metrics).clip_geometry(geom);
 
             match &clipped_geom {
@@ -218,14 +372,16 @@ pub fn clip<const I: usize>(
                                 VtGeometry::LineString(segment.clone()),
                                 props.clone(),
                                 id.clone(),
-                            ));
+                            ).unwrap());
                         }
                     } else {
-                        clipped.push(VtFeature::new(clipped_geom, props.clone(), id.clone()));
+                        clipped.push(VtFeature::new(clipped_geom, props.clone(), id.clone()).unwrap());
                     }
                 }
                 _ => {
-                    clipped.push(VtFeature::new(clipped_geom, props.clone(), id.clone()));
+                    if let Some(feature) = VtFeature::new(clipped_geom, props.clone(), id.clone()) {
+                        clipped.push(feature);
+                    }
                 }
             }
         }

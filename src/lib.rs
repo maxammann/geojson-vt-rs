@@ -150,7 +150,7 @@ impl GeoJSONVT {
         vt
     }
 
-    pub fn get_tile<'a>(&'a mut self, z: u8, x_: u32, y: u32) -> &'a Tile {
+    pub fn get_tile(&mut self, z: u8, x_: u32, y: u32) -> &Tile {
         if z > self.options.max_zoom {
             panic!("Requested zoom higher than maxZoom: {}", z);
         }
@@ -238,6 +238,7 @@ impl GeoJSONVT {
         let z2: f64 = (1u32 << z) as f64;
         let id = to_id(z, x, y);
 
+        // try insert
         match self.tiles.entry(id) {
             Entry::Occupied(_) => {}
             Entry::Vacant(entry) => {
@@ -267,7 +268,7 @@ impl GeoJSONVT {
                     },
                 );
                 self.total += 1;
-                // printf("tile z%i-%i-%i\n", z, x, y);
+                println!("tile z{z}-{x}-{y}");
             }
         };
 
@@ -276,6 +277,10 @@ impl GeoJSONVT {
 
         if features.is_empty() {
             return;
+        } else {
+           if (z == 2) {
+               //eprintln!("{:?}", features)
+           }
         }
 
         // if it's the first-pass tiling
@@ -297,12 +302,16 @@ impl GeoJSONVT {
             // stop tiling if it's our target tile zoom
             if z == cz {
                 tile.source_features = features.clone();
+                println!("target tile zoom");
                 return;
             }
 
             // stop tiling if it's not an ancestor of the target tile
             let m: f64 = (1u32 << (cz - z)) as f64;
-            if x != (cx as f64 / m).floor() as u32 || y != (cy as f64 / m).floor() as u32 {
+            let a = (cx as f64 / m).floor() as u32;
+            let b = (cy as f64 / m).floor() as u32;
+            if x != a || y != b  {
+                println!(" not an ancestor");
                 tile.source_features = features.clone();
                 return;
             }
@@ -396,12 +405,15 @@ impl GeoJSONVT {
             cy,
         );
 
+        
         // if we sliced further down, no need to keep source geometry
-        // TODO borrow checker readd tile.source_features = Vec::new();
+        // TODO Cleanup, dont fetch twice
+        let tile = self.tiles.get_mut(&id).expect("can no longer be None");
+        tile.source_features = Vec::new();
     }
 }
 
-#[derive(Clone, Default, PartialEq)]
+#[derive(Debug,Clone, Default, PartialEq)]
 pub struct BBox {
     pub min: Point2D<f64, UnknownUnit>,
     pub max: Point2D<f64, UnknownUnit>,

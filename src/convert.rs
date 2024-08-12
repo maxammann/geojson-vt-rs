@@ -18,7 +18,6 @@ impl Project {
     pub fn project_point(&self, p: PointType) -> VtPoint {
         let sine = (p[1] * PI / 180.).sin();
         let x = p[0] / 360. + 0.5;
-        // TODO check if this was translated correctly
         let y = (
            (0.5 - 0.25 * ((1. + sine) / (1. - sine)).ln() / PI).min(1.0)).max(
             0.0,
@@ -37,7 +36,7 @@ impl Project {
         result.elements.reserve(len);
 
         for p in points {
-            result.elements.push(self.project_point(p)); // TODO check if this call is fine
+            result.elements.push(self.project_point(p));
         }
 
         for i in 0..len - 1 {
@@ -65,7 +64,7 @@ impl Project {
         result.elements.reserve(len);
 
         for p in ring {
-            result.elements.push(self.project_point(p)); // TODO check if this call is fine
+            result.elements.push(self.project_point(p));
         }
 
         let mut area = 0.0;
@@ -92,7 +91,6 @@ impl Project {
                 Value::Polygon(value) =>VtGeometry::Polygon(self.project_polygon(value)),
                 Value::MultiPolygon(value) =>VtGeometry::MultiPolygon(self.project_multi_polygon(value)),
                 Value::GeometryCollection(value) => unimplemented!(),
-
         }
     }
 
@@ -147,8 +145,11 @@ pub fn convert(features: &FeatureCollection, tolerance: f64, generate_id: bool) 
         let project = Project {
             tolerance
         };
-        
-        projected.push(VtFeature::new(project.project_geometry(&feature.geometry.as_ref().unwrap()), feature.properties.clone().unwrap().into_iter().collect(), featureId.clone()));
+
+        let feature = VtFeature::new(project.project_geometry(&feature.geometry.as_ref().unwrap()), feature.properties.clone().unwrap().into_iter().collect(), featureId.clone());
+        if let Some(feature) = feature {
+            projected.push(feature);
+        }
     }
     return projected;
 }
