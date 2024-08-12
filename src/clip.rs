@@ -1,4 +1,8 @@
-use crate::types::{GetCoordinate, VtEmpty, VtFeature, VtFeatures, VtGeometry, VtGeometryCollection, VtLineString, VtLinearRing, VtMultiLineString, VtMultiPoint, VtMultiPolygon, VtPoint, VtPolygon, calc_progress, intersect};
+use crate::types::{
+    calc_progress, intersect, GetCoordinate, VtEmpty, VtFeature, VtFeatures, VtGeometry,
+    VtGeometryCollection, VtLineString, VtLinearRing, VtMultiLineString, VtMultiPoint,
+    VtMultiPolygon, VtPoint, VtPolygon,
+};
 
 trait IsTrue<const B: bool> {}
 
@@ -139,7 +143,6 @@ impl<const I: usize> Clipper<I> {
             return;
         }
 
-
         let mut slice = self.new_slice(line);
 
         for i in 0..(len - 1) {
@@ -154,7 +157,8 @@ impl<const I: usize> Clipper<I> {
             }
 
             if ak < self.k1 {
-                if bk > self.k2 { // ---|-----|-->
+                if bk > self.k2 {
+                    // ---|-----|-->
                     t = calc_progress::<I>(&a, &b, self.k1);
                     slice.elements.push(intersect::<I>(&a, &b, self.k1, t));
                     if self.line_metrics {
@@ -169,7 +173,8 @@ impl<const I: usize> Clipper<I> {
                     slices.push(slice);
 
                     slice = self.new_slice(line);
-                } else if bk > self.k1 { // ---|-->  |
+                } else if bk > self.k1 {
+                    // ---|-->  |
                     t = calc_progress::<I>(&a, &b, self.k1);
                     slice.elements.push(intersect::<I>(&a, &b, self.k1, t));
                     if self.line_metrics {
@@ -178,14 +183,16 @@ impl<const I: usize> Clipper<I> {
                     if isLastSeg {
                         slice.elements.push(b); // last point
                     }
-                } else if bk == self.k1 && !isLastSeg { // --->|..  |
+                } else if bk == self.k1 && !isLastSeg {
+                    // --->|..  |
                     if self.line_metrics {
                         slice.seg_start = lineLen + segLen;
                     }
                     slice.elements.push(b);
                 }
             } else if ak > self.k2 {
-                if bk < self.k1 { // <--|-----|---
+                if bk < self.k1 {
+                    // <--|-----|---
                     t = calc_progress::<I>(&a, &b, self.k2);
                     slice.elements.push(intersect::<I>(&a, &b, self.k2, t));
                     if self.line_metrics {
@@ -201,7 +208,8 @@ impl<const I: usize> Clipper<I> {
                     slices.push(slice);
 
                     slice = self.new_slice(line);
-                } else if bk < self.k2 { // |  <--|---
+                } else if bk < self.k2 {
+                    // |  <--|---
                     t = calc_progress::<I>(&a, &b, self.k2);
                     slice.elements.push(intersect::<I>(&a, &b, self.k2, t));
                     if self.line_metrics {
@@ -210,7 +218,8 @@ impl<const I: usize> Clipper<I> {
                     if isLastSeg {
                         slice.elements.push(b); // last point
                     }
-                } else if bk == self.k2 && !isLastSeg { // |  ..|<---
+                } else if bk == self.k2 && !isLastSeg {
+                    // |  ..|<---
                     if self.line_metrics {
                         slice.seg_start = lineLen + segLen;
                     }
@@ -219,7 +228,8 @@ impl<const I: usize> Clipper<I> {
             } else {
                 slice.elements.push(a);
 
-                if bk < self.k1 { // <--|---  |
+                if bk < self.k1 {
+                    // <--|---  |
                     t = calc_progress::<I>(&a, &b, self.k1);
                     slice.elements.push(intersect::<I>(&a, &b, self.k1, t));
                     if self.line_metrics {
@@ -227,7 +237,8 @@ impl<const I: usize> Clipper<I> {
                     }
                     slices.push(slice);
                     slice = self.new_slice(line);
-                } else if bk > self.k2 { // |  ---|-->
+                } else if bk > self.k2 {
+                    // |  ---|-->
                     t = calc_progress::<I>(&a, &b, self.k2);
                     slice.elements.push(intersect::<I>(&a, &b, self.k2, t));
                     if self.line_metrics {
@@ -235,7 +246,8 @@ impl<const I: usize> Clipper<I> {
                     }
                     slices.push(slice);
                     slice = self.new_slice(line);
-                } else if isLastSeg { // | --> |
+                } else if isLastSeg {
+                    // | --> |
                     slice.elements.push(b);
                 }
             }
@@ -245,7 +257,8 @@ impl<const I: usize> Clipper<I> {
             }
         }
 
-        if !slice.elements.is_empty() { // add the final slice
+        if !slice.elements.is_empty() {
+            // add the final slice
             if self.line_metrics {
                 slice.seg_end = lineLen;
             }
@@ -263,7 +276,6 @@ impl<const I: usize> Clipper<I> {
             return slice;
         }
 
-
         for i in 0..(len - 1) {
             let a = ring.elements[i];
             let b = ring.elements[i + 1];
@@ -273,20 +285,42 @@ impl<const I: usize> Clipper<I> {
             if ak < self.k1 {
                 if bk > self.k1 {
                     // ---|-->  |
-                    slice.elements.push(intersect::<I>(&a, &b, self.k1, calc_progress::<I>(&a, &b, self.k1)));
+                    slice.elements.push(intersect::<I>(
+                        &a,
+                        &b,
+                        self.k1,
+                        calc_progress::<I>(&a, &b, self.k1),
+                    ));
                     if bk > self.k2 {
                         // ---|-----|-->
-                        slice.elements.push(intersect::<I>(&a, &b, self.k2, calc_progress::<I>(&a, &b, self.k2)));
+                        slice.elements.push(intersect::<I>(
+                            &a,
+                            &b,
+                            self.k2,
+                            calc_progress::<I>(&a, &b, self.k2),
+                        ));
                     } else if i == len - 2 {
                         slice.elements.push(b); // last point
                     }
                 }
             } else if ak > self.k2 {
-                if bk < self.k2 { // |  <--|---
-                    slice.elements.push(intersect::<I>(&a, &b, self.k2, calc_progress::<I>(&a, &b, self.k2)));
-                    if bk < self.k1 // <--|-----|---
+                if bk < self.k2 {
+                    // |  <--|---
+                    slice.elements.push(intersect::<I>(
+                        &a,
+                        &b,
+                        self.k2,
+                        calc_progress::<I>(&a, &b, self.k2),
+                    ));
+                    if bk < self.k1
+                    // <--|-----|---
                     {
-                        slice.elements.push(intersect::<I>(&a, &b, self.k1, calc_progress::<I>(&a, &b, self.k1)));
+                        slice.elements.push(intersect::<I>(
+                            &a,
+                            &b,
+                            self.k1,
+                            calc_progress::<I>(&a, &b, self.k1),
+                        ));
                     } else if i == len - 2 {
                         slice.elements.push(b); // last point
                     }
@@ -296,11 +330,20 @@ impl<const I: usize> Clipper<I> {
                 slice.elements.push(a);
                 if bk < self.k1 {
                     // <--|---  |
-                    slice.elements.push(intersect::<I>(&a, &b, self.k1, calc_progress::<I>(&a, &b, self.k1)));
+                    slice.elements.push(intersect::<I>(
+                        &a,
+                        &b,
+                        self.k1,
+                        calc_progress::<I>(&a, &b, self.k1),
+                    ));
                 } else if bk > self.k2 {
-
                     // |  ---|-->
-                    slice.elements.push(intersect::<I>(&a, &b, self.k2, calc_progress::<I>(&a, &b, self.k2)));
+                    slice.elements.push(intersect::<I>(
+                        &a,
+                        &b,
+                        self.k2,
+                        calc_progress::<I>(&a, &b, self.k2),
+                    ));
                 }
             }
         }
@@ -368,14 +411,18 @@ pub fn clip<const I: usize>(
                 VtGeometry::MultiLineString(result) => {
                     if line_metrics {
                         for segment in result {
-                            clipped.push(VtFeature::new(
-                                VtGeometry::LineString(segment.clone()),
-                                props.clone(),
-                                id.clone(),
-                            ).unwrap());
+                            clipped.push(
+                                VtFeature::new(
+                                    VtGeometry::LineString(segment.clone()),
+                                    props.clone(),
+                                    id.clone(),
+                                )
+                                .unwrap(),
+                            );
                         }
                     } else {
-                        clipped.push(VtFeature::new(clipped_geom, props.clone(), id.clone()).unwrap());
+                        clipped
+                            .push(VtFeature::new(clipped_geom, props.clone(), id.clone()).unwrap());
                     }
                 }
                 _ => {

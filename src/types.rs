@@ -68,14 +68,11 @@ impl<const I: usize> GetCoordinate<I> for Point2D<f64, UnknownUnit> {
     }
 }
 
-
-
-
 // Calculation of progress along a line
 pub fn calc_progress<const I: usize>(a: &VtPoint, b: &VtPoint, v: f64) -> f64 {
     match I {
-        0 =>    (v - a.x) / (b.x - a.x),
-        1 =>    (v - a.y) / (b.y - a.y),
+        0 => (v - a.x) / (b.x - a.x),
+        1 => (v - a.y) / (b.y - a.y),
         _ => {
             panic!("calc_progress is only implemented for I = 0 and I = 1")
         }
@@ -85,11 +82,11 @@ pub fn calc_progress<const I: usize>(a: &VtPoint, b: &VtPoint, v: f64) -> f64 {
 // Intersection calculation based on linear interpolation
 pub fn intersect<const I: usize>(a: &VtPoint, b: &VtPoint, v: f64, t: f64) -> VtPoint {
     match I {
-        0 =>    {
+        0 => {
             let y = (b.y - a.y) * t + a.y;
             VtPoint::new(v, y, 1.0)
         }
-        1 =>   {
+        1 => {
             let x = (b.x - a.x) * t + a.x;
             VtPoint::new(x, v, 1.0)
         }
@@ -101,7 +98,7 @@ pub fn intersect<const I: usize>(a: &VtPoint, b: &VtPoint, v: f64, t: f64) -> Vt
 
 pub type VtMultiPoint = Vec<VtPoint>;
 
-#[derive(Debug,Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VtLineString {
     pub elements: Vec<VtPoint>,
     pub dist: f64,
@@ -118,9 +115,18 @@ impl VtLineString {
             seg_end: 0.0, // seg_start and seg_end are distance along a line in tile units, when lineMetrics = true
         }
     }
+
+    pub fn from_slice(slice: &[VtPoint]) -> Self {
+        Self {
+            elements: Vec::from(slice),
+            dist: 0.0, // line length
+            seg_start: 0.0,
+            seg_end: 0.0, // seg_start and seg_end are distance along a line in tile units, when lineMetrics = true
+        }
+    }
 }
 
-#[derive(Debug,Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VtLinearRing {
     pub elements: Vec<VtPoint>,
     pub area: f64, // polygon ring area
@@ -128,10 +134,10 @@ pub struct VtLinearRing {
 
 impl VtLinearRing {
     pub fn new() -> VtLinearRing {
-       Self {
-           elements: vec![],
-           area: 0.0,
-       }
+        Self {
+            elements: vec![],
+            area: 0.0,
+        }
     }
 }
 
@@ -164,7 +170,7 @@ impl VtFeature {
         feature.process_geometry();
         if feature.num_points == 0 {
             // TODO: Is this the right place to filter for empty?
-            return None
+            return None;
         } else {
             Some(feature)
         }
@@ -173,7 +179,6 @@ impl VtFeature {
 
 impl VtFeature {
     fn process_geometry(&mut self) {
-        
         let mut f = |point: &VtPoint| {
             self.bbox.min.x = (point.x).min(self.bbox.min.x);
             self.bbox.min.y = (point.y).min(self.bbox.min.y);
@@ -211,14 +216,14 @@ impl VtFeature {
             }
             VtGeometry::MultiPolygon(multi_polygon) => {
                 for polygon in multi_polygon {
-                for line_string in polygon {
-                    for point in &line_string.elements {
-                        f(point)
+                    for line_string in polygon {
+                        for point in &line_string.elements {
+                            f(point)
+                        }
                     }
                 }
-                }
             }
-            VtGeometry::GeometryCollection(_) => unimplemented!()
+            VtGeometry::GeometryCollection(_) => unimplemented!(),
         }
     }
 }

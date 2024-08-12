@@ -1,11 +1,11 @@
-use std::collections::hash_map::Entry;
 use crate::clip::clip;
 use crate::convert::convert;
-use crate::tile::{EMPTY_TILE, InternalTile, Tile};
+use crate::tile::{InternalTile, Tile, EMPTY_TILE};
 use crate::types::VtFeatures;
 use crate::wrap::wrap;
 use euclid::{Point2D, UnknownUnit};
 use geojson::{FeatureCollection, GeoJson, Geometry, LineStringType, PointType, PolygonType};
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 mod clip;
@@ -14,6 +14,8 @@ mod simplify;
 mod tile;
 mod types;
 mod wrap;
+
+#[cfg(test)]
 mod tests;
 
 pub struct ToFeatureCollection;
@@ -58,7 +60,6 @@ impl Default for Options {
     }
 }
 
-
 pub fn to_id(z: u8, x: u32, y: u32) -> u64 {
     return (((1u64 << z as u64) * y as u64 + x as u64) * 32) + z as u64;
 }
@@ -75,7 +76,7 @@ pub fn geojson_to_tile(
     let features_ = match geojson {
         GeoJson::Geometry(geometry) => unimplemented!("not yet implemented"),
         GeoJson::Feature(feature) => unimplemented!("not yet implemented"),
-        GeoJson::FeatureCollection(collection) => collection
+        GeoJson::FeatureCollection(collection) => collection,
     };
     let z2 = 1u32 << z;
     let tolerance = (options.tolerance / options.extent as f64) / z2 as f64;
@@ -115,7 +116,8 @@ pub fn geojson_to_tile(
         options.extent,
         tolerance,
         options.line_metrics,
-    ).tile;
+    )
+    .tile;
 }
 
 pub struct GeoJSONVT {
@@ -159,7 +161,6 @@ impl GeoJSONVT {
         let x = ((x_ % z2) + z2) % z2; // wrap tile x coordinate
         let id = to_id(z, x, y);
 
-
         if self.tiles.contains_key(&id) {
             return &self.tiles[&id].tile;
         }
@@ -189,10 +190,8 @@ impl GeoJSONVT {
             panic!("Parent tile not found");
         }
 
-
         return &EMPTY_TILE;
     }
-
 
     pub fn get_internal_tiles(&self) -> &HashMap<u64, InternalTile> {
         return &self.tiles;
@@ -216,13 +215,7 @@ impl GeoJSONVT {
         return parent;
     }
 
-    fn split_tile_zeros(
-        &mut self,
-        features: &VtFeatures,
-        z: u8,
-        x: u32,
-        y: u32,
-    ) {
+    fn split_tile_zeros(&mut self, features: &VtFeatures, z: u8, x: u32, y: u32) {
         self.split_tile(features, z, x, y, 0, 0, 0)
     }
     fn split_tile(
@@ -248,7 +241,6 @@ impl GeoJSONVT {
                     self.options.tile.tolerance / (z2 * self.options.tile.extent as f64)
                 };
 
-
                 entry.insert(InternalTile::new(
                     features,
                     z,
@@ -272,15 +264,14 @@ impl GeoJSONVT {
             }
         };
 
-
         let tile = self.tiles.get_mut(&id).expect("can no longer be None");
 
         if features.is_empty() {
             return;
         } else {
-           if (z == 2) {
-               //eprintln!("{:?}", features)
-           }
+            if (z == 2) {
+                //eprintln!("{:?}", features)
+            }
         }
 
         // if it's the first-pass tiling
@@ -310,7 +301,7 @@ impl GeoJSONVT {
             let m: f64 = (1u32 << (cz - z)) as f64;
             let a = (cx as f64 / m).floor() as u32;
             let b = (cy as f64 / m).floor() as u32;
-            if x != a || y != b  {
+            if x != a || y != b {
                 println!(" not an ancestor");
                 tile.source_features = features.clone();
                 return;
@@ -405,7 +396,6 @@ impl GeoJSONVT {
             cy,
         );
 
-        
         // if we sliced further down, no need to keep source geometry
         // TODO Cleanup, dont fetch twice
         let tile = self.tiles.get_mut(&id).expect("can no longer be None");
@@ -413,7 +403,7 @@ impl GeoJSONVT {
     }
 }
 
-#[derive(Debug,Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct BBox {
     pub min: Point2D<f64, UnknownUnit>,
     pub max: Point2D<f64, UnknownUnit>,

@@ -1,10 +1,16 @@
 use std::collections::HashMap;
 
 use geojson::feature::Id;
-use geojson::{Feature, FeatureCollection, Geometry, JsonObject, JsonValue, LineStringType, PointType, PolygonType, Value};
+use geojson::{
+    Feature, FeatureCollection, Geometry, JsonObject, JsonValue, LineStringType, PointType,
+    PolygonType, Value,
+};
 use serde_json::Number;
 
-use crate::types::{VtEmpty, VtFeature, VtFeatures, VtGeometry, VtGeometryCollection, VtLinearRing, VtLineString, VtMultiLineString, VtMultiPoint, VtMultiPolygon, VtPoint, VtPolygon};
+use crate::types::{
+    VtEmpty, VtFeature, VtFeatures, VtGeometry, VtGeometryCollection, VtLineString, VtLinearRing,
+    VtMultiLineString, VtMultiPoint, VtMultiPolygon, VtPoint, VtPolygon,
+};
 use crate::{BBox, LinearRingType, MultiLineStringType, MultiPointType, MultiPolygonType};
 
 pub static EMPTY_TILE: Tile = Tile {
@@ -93,12 +99,7 @@ impl InternalTile {
 }
 
 impl InternalTile {
-    fn add_geometry_feature(
-        &mut self,
-        geom: &VtGeometry,
-        props: &JsonObject,
-        id: &Option<Id>,
-    ) {
+    fn add_geometry_feature(&mut self, geom: &VtGeometry, props: &JsonObject, id: &Option<Id>) {
         match geom {
             VtGeometry::Empty(empty) => self.add_empty_feature(empty, props, id),
             VtGeometry::Point(point) => self.add_point_feature(point, props, id),
@@ -121,31 +122,19 @@ impl InternalTile {
         }
     }
 
-    fn add_empty_feature(
-        &mut self,
-        value: &VtEmpty,
-        props: &JsonObject,
-        id: &Option<Id>,
-    ) {
+    fn add_empty_feature(&mut self, value: &VtEmpty, props: &JsonObject, id: &Option<Id>) {
         // TODO self.tile.features.features.push(self.transform_empty(value), props, id);
     }
 
-    fn add_point_feature(
-        &mut self,
-        value: &VtPoint,
-        props: &JsonObject,
-        id: &Option<Id>,
-    ) {
+    fn add_point_feature(&mut self, value: &VtPoint, props: &JsonObject, id: &Option<Id>) {
         let geometry = Some(Geometry::new(Value::Point(self.transform_point(value))));
-        self.tile.features.features.push(
-            Feature {
-                bbox: None,
-                geometry: geometry,
-                id: id.clone(),
-                properties: Some(props.clone()),
-                foreign_members: None,
-            }
-        );
+        self.tile.features.features.push(Feature {
+            bbox: None,
+            geometry: geometry,
+            id: id.clone(),
+            properties: Some(props.clone()),
+            foreign_members: None,
+        });
     }
 
     fn add_multi_point_feature(
@@ -158,30 +147,20 @@ impl InternalTile {
 
         match new_multi.len() {
             0 => {}
-            1 => self
-                .tile
-                .features
-                .features
-                .push(
-                    Feature {
-                        bbox: None,
-                        geometry: Some(Geometry::new(Value::Point(new_multi[0].clone()))),
-                        id: id.clone(),
-                        properties: Some(props.clone()),
-                        foreign_members: None,
-                    }),
-            _ => self
-                .tile
-                .features
-                .features
-                .push(
-                    Feature {
-                        bbox: None,
-                        geometry: Some(Geometry::new(Value::MultiPoint(new_multi.clone()))),
-                        id: id.clone(),
-                        properties: Some(props.clone()),
-                        foreign_members: None,
-                    }),
+            1 => self.tile.features.features.push(Feature {
+                bbox: None,
+                geometry: Some(Geometry::new(Value::Point(new_multi[0].clone()))),
+                id: id.clone(),
+                properties: Some(props.clone()),
+                foreign_members: None,
+            }),
+            _ => self.tile.features.features.push(Feature {
+                bbox: None,
+                geometry: Some(Geometry::new(Value::MultiPoint(new_multi.clone()))),
+                id: id.clone(),
+                properties: Some(props.clone()),
+                foreign_members: None,
+            }),
         }
     }
     fn add_line_string_feature(
@@ -202,26 +181,21 @@ impl InternalTile {
                     "mapbox_clip_end".to_string(),
                     JsonValue::Number(Number::from_f64(line.seg_end / line.dist).unwrap()),
                 );
-                self.tile
-                    .features
-                    .features
-                    .push(
-                        Feature {
-                            bbox: None,
-                            geometry: Some(Geometry::new(Value::LineString(new_line.clone()))),
-                            id: id.clone(),
-                            properties: Some(newProps),
-                            foreign_members: None,
-                        });
+                self.tile.features.features.push(Feature {
+                    bbox: None,
+                    geometry: Some(Geometry::new(Value::LineString(new_line.clone()))),
+                    id: id.clone(),
+                    properties: Some(newProps),
+                    foreign_members: None,
+                });
             } else {
-                self.tile.features.features.push(
-                    Feature {
-                        bbox: None,
-                        geometry: Some(Geometry::new(Value::LineString(new_line.clone()))),
-                        id: id.clone(),
-                        properties: Some(props.clone()),
-                        foreign_members: None,
-                    });
+                self.tile.features.features.push(Feature {
+                    bbox: None,
+                    geometry: Some(Geometry::new(Value::LineString(new_line.clone()))),
+                    id: id.clone(),
+                    properties: Some(props.clone()),
+                    foreign_members: None,
+                });
             }
         }
     }
@@ -235,49 +209,32 @@ impl InternalTile {
 
         match new_multi.len() {
             0 => {}
-            1 => self
-                .tile
-                .features
-                .features
-                .push(
-                    Feature {
-                        bbox: None,
-                        geometry: Some(Geometry::new(Value::LineString(new_multi[0].clone()))),
-                        id: id.clone(),
-                        properties: Some(props.clone()),
-                        foreign_members: None,
-                    }),
-            _ => self
-                .tile
-                .features
-                .features
-                .push(Feature {
-                    bbox: None,
-                    geometry: Some(Geometry::new(Value::MultiLineString(new_multi.clone()))),
-                    id: id.clone(),
-                    properties: Some(props.clone()),
-                    foreign_members: None,
-                }),
+            1 => self.tile.features.features.push(Feature {
+                bbox: None,
+                geometry: Some(Geometry::new(Value::LineString(new_multi[0].clone()))),
+                id: id.clone(),
+                properties: Some(props.clone()),
+                foreign_members: None,
+            }),
+            _ => self.tile.features.features.push(Feature {
+                bbox: None,
+                geometry: Some(Geometry::new(Value::MultiLineString(new_multi.clone()))),
+                id: id.clone(),
+                properties: Some(props.clone()),
+                foreign_members: None,
+            }),
         }
     }
-    fn add_polygon_feature(
-        &mut self,
-        value: &VtPolygon,
-        props: &JsonObject,
-        id: &Option<Id>,
-    ) {
+    fn add_polygon_feature(&mut self, value: &VtPolygon, props: &JsonObject, id: &Option<Id>) {
         let new_polygon = self.transform_polygon(value);
         if !new_polygon.is_empty() {
-            self.tile
-                .features
-                .features.push(
-                Feature {
-                    bbox: None,
-                    geometry: Some(Geometry::new(Value::Polygon(new_polygon.clone()))),
-                    id: id.clone(),
-                    properties: Some(props.clone()),
-                    foreign_members: None,
-                });
+            self.tile.features.features.push(Feature {
+                bbox: None,
+                geometry: Some(Geometry::new(Value::Polygon(new_polygon.clone()))),
+                id: id.clone(),
+                properties: Some(props.clone()),
+                foreign_members: None,
+            });
         }
     }
     fn add_multi_polygon_feature(
@@ -290,32 +247,20 @@ impl InternalTile {
 
         match new_multi.len() {
             0 => {}
-            1 => self
-                .tile
-                .features
-                .features
-                .push(
-                    Feature {
-                        bbox: None,
-                        geometry: Some(Geometry::new(Value::Polygon(new_multi[0].clone()))),
-                        id: id.clone(),
-                        properties: Some(props.clone()),
-                        foreign_members: None,
-                    }
-                    
-                    
-                  ),
-            _ => self
-                .tile
-                .features
-                .features
-                .push( Feature {
-                    bbox: None,
-                    geometry: Some(Geometry::new(Value::MultiPolygon(new_multi.clone()))),
-                    id: id.clone(),
-                    properties: Some(props.clone()),
-                    foreign_members: None,
-                }),
+            1 => self.tile.features.features.push(Feature {
+                bbox: None,
+                geometry: Some(Geometry::new(Value::Polygon(new_multi[0].clone()))),
+                id: id.clone(),
+                properties: Some(props.clone()),
+                foreign_members: None,
+            }),
+            _ => self.tile.features.features.push(Feature {
+                bbox: None,
+                geometry: Some(Geometry::new(Value::MultiPolygon(new_multi.clone()))),
+                id: id.clone(),
+                properties: Some(props.clone()),
+                foreign_members: None,
+            }),
         }
     }
     fn add_geometry_collection_feature(
@@ -329,7 +274,6 @@ impl InternalTile {
             self.add_geometry_feature(geom, props, id)
         }
     }
-
 
     fn transform_multi_polygon_feature(&mut self, polygons: &VtMultiPolygon) -> MultiPolygonType {
         let mut result: MultiPolygonType = Vec::new();
@@ -389,12 +333,10 @@ impl InternalTile {
 
     fn transform_point(&mut self, p: &VtPoint) -> PointType {
         self.tile.num_simplified = self.tile.num_simplified + 1;
-        return Vec::from(
-            &[
-                ((p.x * self.z2 - self.x as f64) * self.extent as f64).round(), // TODO do these have the right type. Shouldnt it be i16?
-                ((p.y * self.z2 - self.y as f64) * self.extent as f64).round(),
-            ]
-        );
+        return Vec::from(&[
+            ((p.x * self.z2 - self.x as f64) * self.extent as f64).round(), // TODO do these have the right type. Shouldnt it be i16?
+            ((p.y * self.z2 - self.y as f64) * self.extent as f64).round(),
+        ]);
     }
 
     // TODO

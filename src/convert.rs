@@ -1,10 +1,15 @@
-use std::f64::consts::PI;
 use crate::simplify::{simplify, simplify_wrapper};
-use crate::types::{VtEmpty, VtFeature, VtFeatures, VtGeometry, VtLineString, VtLinearRing, VtMultiLineString, VtMultiPoint, VtMultiPolygon, VtPoint, VtPolygon};
+use crate::types::{
+    VtEmpty, VtFeature, VtFeatures, VtGeometry, VtLineString, VtLinearRing, VtMultiLineString,
+    VtMultiPoint, VtMultiPolygon, VtPoint, VtPolygon,
+};
 use crate::{LinearRingType, MultiLineStringType, MultiPointType, MultiPolygonType};
-use geojson::{Feature, FeatureCollection, Geometry, LineStringType, PointType, PolygonType, Value};
 use geojson::feature::Id;
+use geojson::{
+    Feature, FeatureCollection, Geometry, LineStringType, PointType, PolygonType, Value,
+};
 use serde_json::Number;
+use std::f64::consts::PI;
 
 pub struct Project {
     pub tolerance: f64,
@@ -18,10 +23,7 @@ impl Project {
     pub fn project_point(&self, p: PointType) -> VtPoint {
         let sine = (p[1] * PI / 180.).sin();
         let x = p[0] / 360. + 0.5;
-        let y = (
-           (0.5 - 0.25 * ((1. + sine) / (1. - sine)).ln() / PI).min(1.0)).max(
-            0.0,
-        );
+        let y = ((0.5 - 0.25 * ((1. + sine) / (1. - sine)).ln() / PI).min(1.0)).max(0.0);
         return VtPoint { x, y, z: 0.0 };
     }
 
@@ -84,13 +86,19 @@ impl Project {
     pub fn project_geometry(&self, geometry: &Geometry) -> VtGeometry {
         // TODO check if this is correct
         match &geometry.value {
-                Value::Point(value) => VtGeometry::Point(self.project_point(value.clone())),
-                Value::MultiPoint(value) => VtGeometry::MultiPoint(self.project_multi_point(value)),
-                Value::LineString(value) =>VtGeometry::LineString(self.project_line_string(value.clone())),
-                Value::MultiLineString(value) =>VtGeometry::MultiLineString(self.project_multi_line_string(value)),
-                Value::Polygon(value) =>VtGeometry::Polygon(self.project_polygon(value)),
-                Value::MultiPolygon(value) =>VtGeometry::MultiPolygon(self.project_multi_polygon(value)),
-                Value::GeometryCollection(value) => unimplemented!(),
+            Value::Point(value) => VtGeometry::Point(self.project_point(value.clone())),
+            Value::MultiPoint(value) => VtGeometry::MultiPoint(self.project_multi_point(value)),
+            Value::LineString(value) => {
+                VtGeometry::LineString(self.project_line_string(value.clone()))
+            }
+            Value::MultiLineString(value) => {
+                VtGeometry::MultiLineString(self.project_multi_line_string(value))
+            }
+            Value::Polygon(value) => VtGeometry::Polygon(self.project_polygon(value)),
+            Value::MultiPolygon(value) => {
+                VtGeometry::MultiPolygon(self.project_multi_polygon(value))
+            }
+            Value::GeometryCollection(value) => unimplemented!(),
         }
     }
 
@@ -139,14 +147,16 @@ pub fn convert(features: &FeatureCollection, tolerance: f64, generate_id: bool) 
         let mut featureId = feature.id.clone();
         if generate_id {
             featureId = Some(Id::Number(Number::from(genId)));
-            genId= genId +1;
+            genId = genId + 1;
         }
-        
-        let project = Project {
-            tolerance
-        };
 
-        let feature = VtFeature::new(project.project_geometry(&feature.geometry.as_ref().unwrap()), feature.properties.clone().unwrap().into_iter().collect(), featureId.clone());
+        let project = Project { tolerance };
+
+        let feature = VtFeature::new(
+            project.project_geometry(&feature.geometry.as_ref().unwrap()),
+            feature.properties.clone().unwrap().into_iter().collect(),
+            featureId.clone(),
+        );
         if let Some(feature) = feature {
             projected.push(feature);
         }

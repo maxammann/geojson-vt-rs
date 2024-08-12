@@ -53,6 +53,7 @@ pub fn simplify(points: &mut Vec<VtPoint>, first: usize, last: usize, sq_toleran
     if max_sq_dist > sq_tolerance {
         // save the point importance in squared pixels as a z coordinate
         points[index].z = max_sq_dist;
+        println!("{index} - {:.70}", max_sq_dist);
         if index - first > 1 {
             simplify(points, first, index, sq_tolerance);
         }
