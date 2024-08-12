@@ -20,6 +20,57 @@ pub enum VtGeometry {
     GeometryCollection(VtGeometryCollection),
 }
 
+impl VtGeometry {
+
+    pub fn point(self) -> Option<VtPoint> {
+        match self {
+            VtGeometry::Point(value) => Some(value),
+            _ => None
+        }
+    }
+
+    pub fn multi_point(self) -> Option<VtMultiPoint> {
+        match self {
+            VtGeometry::MultiPoint(value) => Some(value),
+            _ => None
+        }
+    }
+
+
+    pub fn line_string(self) -> Option<VtLineString> {
+        match self {
+            VtGeometry::LineString(value) => Some(value),
+            _ => None
+        }
+    }
+    pub fn multi_line_string(self) -> Option<VtMultiLineString> {
+        match self {
+            VtGeometry::MultiLineString(value) => Some(value),
+            _ => None
+        }
+    }
+    pub fn polygon(self) -> Option<VtPolygon> {
+        match self {
+            VtGeometry::Polygon(value) => Some(value),
+            _ => None
+        }
+    }
+
+    pub fn multi_polygon(self) -> Option<VtMultiPolygon> {
+        match self {
+            VtGeometry::MultiPolygon(value) => Some(value),
+            _ => None
+        }
+    }
+    pub fn geometry_collection(self) -> Option<VtGeometryCollection> {
+        match self {
+            VtGeometry::GeometryCollection(value) => Some(value),
+            _ => None
+        }
+    }
+
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct VtPoint {
     pub x: f64,
@@ -139,6 +190,12 @@ impl VtLinearRing {
             area: 0.0,
         }
     }
+    pub fn from_slice(points: &[VtPoint]) -> VtLinearRing {
+        Self {
+            elements: Vec::from(points),
+            area: 0.0,
+        }
+    }
 }
 
 pub type VtMultiLineString = Vec<VtLineString>;
@@ -177,9 +234,51 @@ impl VtFeature {
     }
 }
 
+pub(crate) fn for_each_point<F>(geometry: &mut VtGeometry, mut f: F) where F: FnMut(&mut VtPoint) {
+    // TODO verify this translation
+    match geometry {
+        VtGeometry::Empty(_) => {}
+        VtGeometry::Point(point) => f(point),
+        VtGeometry::MultiPoint(multi_point) => {
+            for point in multi_point {
+                f(point)
+            }
+        }
+        VtGeometry::LineString(line_string) => {
+            for point in &mut line_string.elements {
+                f(point)
+            }
+        }
+        VtGeometry::MultiLineString(multi_line_string) => {
+            for line_string in multi_line_string {
+                for point in &mut line_string.elements {
+                    f(point)
+                }
+            }
+        }
+        VtGeometry::Polygon(polygon) => {
+            for line_string in polygon {
+                for point in &mut line_string.elements {
+                    f(point)
+                }
+            }
+        }
+        VtGeometry::MultiPolygon(multi_polygon) => {
+            for polygon in multi_polygon {
+                for line_string in polygon {
+                    for point in &mut line_string.elements {
+                        f(point)
+                    }
+                }
+            }
+        }
+        VtGeometry::GeometryCollection(_) => unimplemented!(),
+    }
+}
+
 impl VtFeature {
     fn process_geometry(&mut self) {
-        let mut f = |point: &VtPoint| {
+        let f = |point: &mut VtPoint| {
             self.bbox.min.x = (point.x).min(self.bbox.min.x);
             self.bbox.min.y = (point.y).min(self.bbox.min.y);
             self.bbox.max.x = (point.x).max(self.bbox.max.x);
@@ -187,44 +286,7 @@ impl VtFeature {
             self.num_points = self.num_points + 1;
         };
         // TODO verify this translation
-        match &self.geometry {
-            VtGeometry::Empty(_) => {}
-            VtGeometry::Point(point) => f(point),
-            VtGeometry::MultiPoint(multi_point) => {
-                for point in multi_point {
-                    f(point)
-                }
-            }
-            VtGeometry::LineString(line_string) => {
-                for point in &line_string.elements {
-                    f(point)
-                }
-            }
-            VtGeometry::MultiLineString(multi_line_string) => {
-                for line_string in multi_line_string {
-                    for point in &line_string.elements {
-                        f(point)
-                    }
-                }
-            }
-            VtGeometry::Polygon(polygon) => {
-                for line_string in polygon {
-                    for point in &line_string.elements {
-                        f(point)
-                    }
-                }
-            }
-            VtGeometry::MultiPolygon(multi_polygon) => {
-                for polygon in multi_polygon {
-                    for line_string in polygon {
-                        for point in &line_string.elements {
-                            f(point)
-                        }
-                    }
-                }
-            }
-            VtGeometry::GeometryCollection(_) => unimplemented!(),
-        }
+        for_each_point(&mut self.geometry, f)
     }
 }
 

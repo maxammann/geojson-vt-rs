@@ -100,6 +100,7 @@ impl<const I: usize> Clipper<I> {
         for geometry in geometries {
             // TODO: verify if translated correctly
             result.push(self.clip_geometry(geometry));
+            unimplemented!()
         }
         return VtGeometry::GeometryCollection(result);
     }

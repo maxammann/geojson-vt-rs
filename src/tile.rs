@@ -23,11 +23,11 @@ pub static EMPTY_TILE: Tile = Tile {
     num_simplified: 0,
 };
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Tile {
-    pub(crate) features: geojson::FeatureCollection,
+    pub features: FeatureCollection,
     pub num_points: u32,
-    num_simplified: u32,
+    pub num_simplified: u32,
 }
 
 #[derive(PartialEq)]
@@ -271,7 +271,8 @@ impl InternalTile {
     ) {
         for geom in value {
             // TODO verify this is correct
-            self.add_geometry_feature(geom, props, id)
+            self.add_geometry_feature(geom, props, id);
+            unimplemented!()
         }
     }
 
@@ -332,7 +333,7 @@ impl InternalTile {
     }
 
     fn transform_point(&mut self, p: &VtPoint) -> PointType {
-        self.tile.num_simplified = self.tile.num_simplified + 1;
+        self.tile.num_simplified += 1;
         return Vec::from(&[
             ((p.x * self.z2 - self.x as f64) * self.extent as f64).round(), // TODO do these have the right type. Shouldnt it be i16?
             ((p.y * self.z2 - self.y as f64) * self.extent as f64).round(),
@@ -346,11 +347,16 @@ impl InternalTile {
 
     fn transform_linear_ring(&mut self, ring: &VtLinearRing) -> LinearRingType {
         let mut result: LinearRingType = Vec::new();
+        //println!("sq_tolerance{:?}", self.sq_tolerance);
         if ring.area > self.sq_tolerance {
             result.reserve(ring.elements.len());
             for p in &ring.elements {
+                eprintln!("p{:.6}, {:.6}, z{:.15}", p.x, p.y, p.z);
+                let vec = self.transform_point(p);
+                eprintln!("{:?}", vec);
                 if p.z > self.sq_tolerance {
-                    result.push(self.transform_point(p));
+
+                    result.push(vec);
                 }
             }
         }

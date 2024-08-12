@@ -10,6 +10,7 @@ use geojson::{
 };
 use serde_json::Number;
 use std::f64::consts::PI;
+use euclid::approxeq::ApproxEq;
 
 pub struct Project {
     pub tolerance: f64,
@@ -23,7 +24,7 @@ impl Project {
     pub fn project_point(&self, p: PointType) -> VtPoint {
         let sine = (p[1] * PI / 180.).sin();
         let x = p[0] / 360. + 0.5;
-        let y = ((0.5 - 0.25 * ((1. + sine) / (1. - sine)).ln() / PI).min(1.0)).max(0.0);
+        let y = (0.5 - 0.25 * ((1. + sine) / (1. - sine)).ln() / PI).min(1.0).max(0.0);
         return VtPoint { x, y, z: 0.0 };
     }
 

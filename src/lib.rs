@@ -4,7 +4,7 @@ use crate::tile::{InternalTile, Tile, EMPTY_TILE};
 use crate::types::VtFeatures;
 use crate::wrap::wrap;
 use euclid::{Point2D, UnknownUnit};
-use geojson::{FeatureCollection, GeoJson, Geometry, LineStringType, PointType, PolygonType};
+use geojson::{Feature, FeatureCollection, GeoJson, Geometry, JsonObject, LineStringType, PointType, PolygonType};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
@@ -128,9 +128,29 @@ pub struct GeoJSONVT {
 }
 
 impl GeoJSONVT {
+
+    pub fn from_geojson(geojson: &GeoJson, options: &Options) -> Self {
+        // TODO cleanup this conversion
+        let collection = match geojson {
+            GeoJson::Geometry(geom) => FeatureCollection {
+                bbox: None,
+                features: vec![Feature {
+                    bbox: None,
+                    geometry: Some(geom.clone()),
+                    id: None,
+                    properties: Some(JsonObject::new()),
+                    foreign_members: None,
+                }],
+                foreign_members: None,
+            },
+            GeoJson::Feature(_) => unimplemented!(),
+            GeoJson::FeatureCollection(features) => features.clone(),
+        };
+        Self::new(&collection, options)
+    }
     pub fn new(features_: &FeatureCollection, options: &Options) -> Self {
         let mut vt = Self {
-            options: Default::default(),
+            options: options.clone(),
             stats: Default::default(),
             total: 0,
             tiles: Default::default(),
@@ -267,11 +287,10 @@ impl GeoJSONVT {
         let tile = self.tiles.get_mut(&id).expect("can no longer be None");
 
         if features.is_empty() {
+            eprintln!("no feature");
             return;
         } else {
-            if (z == 2) {
-                //eprintln!("{:?}", features)
-            }
+            //eprintln!("{:?}", features)
         }
 
         // if it's the first-pass tiling
@@ -293,7 +312,7 @@ impl GeoJSONVT {
             // stop tiling if it's our target tile zoom
             if z == cz {
                 tile.source_features = features.clone();
-                println!("target tile zoom");
+                //println!("target tile zoom");
                 return;
             }
 
@@ -302,13 +321,13 @@ impl GeoJSONVT {
             let a = (cx as f64 / m).floor() as u32;
             let b = (cy as f64 / m).floor() as u32;
             if x != a || y != b {
-                println!(" not an ancestor");
+                //println!(" not an ancestor");
                 tile.source_features = features.clone();
                 return;
             }
         }
 
-        let p: f64 = 0.5 * self.options.tile.buffer as f64 / self.options.tile.extent as f64;
+        let p: f64 = 0.5 * self.options.tile.buffer as f64 / self.options.tile.extent as f64; // TODO: Is the calculation order right?
         let min = tile.bbox.min;
         let max = tile.bbox.max;
 

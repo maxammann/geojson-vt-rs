@@ -1,16 +1,14 @@
 use crate::clip::clip;
-use crate::types::{VtFeatures, VtGeometry};
+use crate::types::{for_each_point, VtFeatures, VtGeometry, VtPoint};
 
 // Function to shift coordinates of features
 pub fn shift_coords(features: &mut VtFeatures, offset: f64) {
     for feature in features {
         // TODO verify this translation
-        match &mut feature.geometry {
-            VtGeometry::Point(point) => {
-                point.x += offset;
-            }
-            _ => {}
-        }
+        let f = |point: &mut VtPoint| {
+            point.x += offset;
+        };
+        for_each_point(&mut feature.geometry, f);
 
         feature.bbox.min.x += offset;
         feature.bbox.max.x += offset;
