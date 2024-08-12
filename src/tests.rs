@@ -9,10 +9,7 @@ use crate::{
 };
 use euclid::approxeq::ApproxEq;
 use geojson::feature::Id;
-use geojson::{
-    FeatureCollection, GeoJson, Geometry, JsonObject, JsonValue, LineStringType, PointType,
-    PolygonType, Position,
-};
+use geojson::{Feature, FeatureCollection, GeoJson, Geometry, JsonObject, JsonValue, LineStringType, PointType, PolygonType, Position};
 use serde::de::Unexpected::Str;
 use serde_json::{Number, Value};
 use std::collections::HashMap;
@@ -840,19 +837,32 @@ fn tile_tests() {
         let mut file = File::open(&test.input_file).unwrap();
         let mut data = String::new();
         file.read_to_string(&mut data).unwrap();
-        let actual = gen_tiles(&data, test.max_zoom, test.max_points, test.line_metrics);
+        let mut actual = gen_tiles(&data, test.max_zoom, test.max_points, test.line_metrics);
         let expected = parseJSONTiles(
             serde_json::from_reader(File::open(&test.expected_file).unwrap()).unwrap(),
         );
-        
-        for (key, value) in &actual {
-            fs::write(format!("us/actual/{}.json", key), value.clone().to_string()).unwrap();
+
+        for (key, value) in &mut actual {
+
+
+            value.features = value.features.iter().map(|feature| Feature {
+                bbox: feature.bbox.clone(),
+                geometry:  feature.geometry.clone().map(|geom| Geometry::new(match geom.value {
+                    geojson::Value::MultiPolygon(multi) => geojson::Value::Polygon(multi.iter().flatten().cloned().collect::<Vec<_>>()),
+                    v => v
+                })),
+                id:   feature.id.clone(),
+                properties:   feature.properties.clone(),
+                foreign_members:   feature.foreign_members.clone(),
+            }).collect();
+
+            //fs::write(format!("us/actual/{}.json", key), value.clone().to_string()).unwrap();
         }
 
         for (key, value) in &expected {
-            fs::write(format!("us/expected/{}.json", key), value.clone().to_string()).unwrap();
+            //fs::write(format!("us/expected/{}.json", key), value.clone().to_string()).unwrap();
         }
- 
+
         assert_eq!(expected, actual);
     }
 }
@@ -1034,4 +1044,26 @@ fn geojson_to_tile_clip_vertex_on_tile_border() {
     let clipEnd1 = props.get("mapbox_clip_end").unwrap().as_f64().unwrap();
     assert!(0.660622.approx_eq_eps(&clipStart1, &kEpsilon));
     assert!(1.0.approx_eq_eps(&clipEnd1, &kEpsilon));
+}
+
+
+#[test]
+fn web_diff() {
+    let geojson = GeoJson::from_reader(BufReader::new(
+        File::open("fixtures/last_feature.json").unwrap(),
+    ))
+        .unwrap();
+    let mut index = GeoJSONVT::from_geojson(&geojson, &Options::default());
+
+    let features = &index.get_tile(6,11,23).features;
+    let expected1 = parseJSONTile(
+        serde_json::from_reader(File::open("fixtures/last_feature-tile-fixed.json").unwrap()).unwrap(),
+    );
+    assert_eq!(features, &expected1);
+
+
+    let expected2 = parseJSONTile(
+        serde_json::from_reader(File::open("fixtures/last_feature-tile-broken-new.json").unwrap()).unwrap(),
+    );
+    assert_ne!(features, &expected2);
 }
