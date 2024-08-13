@@ -18,6 +18,7 @@ pub enum VtGeometry {
     GeometryCollection(VtGeometryCollection),
 }
 
+#[cfg(test)]
 impl VtGeometry {
     pub fn point(self) -> Option<VtPoint> {
         match self {
@@ -74,12 +75,11 @@ pub struct VtPoint {
 }
 
 impl VtPoint {
-    // Constructor with z value
     pub fn new(x: f64, y: f64, z: f64) -> VtPoint {
         VtPoint { x, y, z }
     }
 
-    // Constructor without z value
+    #[cfg(test)]
     pub fn new_without_z(x: f64, y: f64) -> VtPoint {
         VtPoint::new(x, y, 0.0)
     }
@@ -96,6 +96,7 @@ pub struct VtLineString {
 }
 
 impl VtLineString {
+    #[cfg(test)]
     pub fn from_slice(slice: &[VtPoint]) -> Self {
         Self {
             elements: Vec::from(slice),
@@ -112,6 +113,7 @@ pub struct VtLinearRing {
     pub area: f64, // polygon ring area
 }
 
+#[cfg(test)]
 impl VtLinearRing {
     pub fn from_slice(points: &[VtPoint]) -> VtLinearRing {
         Self {
