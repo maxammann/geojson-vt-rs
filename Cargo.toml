@@ -7,8 +7,10 @@ edition = "2021"
 
 [dependencies]
 serde = "1"
-# "arbitrary_precision"
 serde_json = { version = "1", features = ["float_roundtrip"] }
 geozero = "0.13.0"
 geojson = "0.24.1"
 euclid = "0.22.10"
+
+[dev-dependencies]
+approx = "0.5.1"

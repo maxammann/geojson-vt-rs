@@ -1,7 +1,5 @@
-use std::collections::HashMap;
-
 use euclid::{Point2D, UnknownUnit};
-use geojson::{JsonObject, JsonValue};
+use geojson::JsonObject;
 
 use crate::BBox;
 
@@ -87,83 +85,17 @@ impl VtPoint {
     }
 }
 
-// Function templates to get coordinates
-pub trait GetCoordinate<const I: usize> {
-    fn get(&self) -> f64;
-}
-
-impl<const I: usize> GetCoordinate<I> for VtPoint {
-    fn get(&self) -> f64 {
-        match I {
-            0 => self.x,
-            1 => self.y,
-            _ => {
-                panic!("GetCoordinate is only implemented for I = 0 and I = 1")
-            }
-        }
-    }
-}
-
-impl<const I: usize> GetCoordinate<I> for Point2D<f64, UnknownUnit> {
-    fn get(&self) -> f64 {
-        match I {
-            0 => self.x,
-            1 => self.y,
-            _ => {
-                panic!("GetCoordinate is only implemented for I = 0 and I = 1")
-            }
-        }
-    }
-}
-
-// Calculation of progress along a line
-pub fn calc_progress<const I: usize>(a: &VtPoint, b: &VtPoint, v: f64) -> f64 {
-    match I {
-        0 => (v - a.x) / (b.x - a.x),
-        1 => (v - a.y) / (b.y - a.y),
-        _ => {
-            panic!("calc_progress is only implemented for I = 0 and I = 1")
-        }
-    }
-}
-
-// Intersection calculation based on linear interpolation
-pub fn intersect<const I: usize>(a: &VtPoint, b: &VtPoint, v: f64, t: f64) -> VtPoint {
-    match I {
-        0 => {
-            let y = (b.y - a.y) * t + a.y;
-            VtPoint::new(v, y, 1.0)
-        }
-        1 => {
-            let x = (b.x - a.x) * t + a.x;
-            VtPoint::new(x, v, 1.0)
-        }
-        _ => {
-            panic!("calc_progress is only implemented for I = 0 and I = 1")
-        }
-    }
-}
-
 pub type VtMultiPoint = Vec<VtPoint>;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct VtLineString {
     pub elements: Vec<VtPoint>,
-    pub dist: f64,
+    pub dist: f64, // line length
     pub seg_start: f64,
-    pub seg_end: f64,
+    pub seg_end: f64,// seg_start and seg_end are distance along a line in tile units, when lineMetrics = true
 }
 
 impl VtLineString {
-    pub fn new() -> Self {
-        Self {
-            elements: vec![],
-            dist: 0.0, // line length
-            seg_start: 0.0,
-            seg_end: 0.0, // seg_start and seg_end are distance along a line in tile units, when lineMetrics = true
-        }
-    }
-
     pub fn from_slice(slice: &[VtPoint]) -> Self {
         Self {
             elements: Vec::from(slice),
@@ -174,19 +106,13 @@ impl VtLineString {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct VtLinearRing {
     pub elements: Vec<VtPoint>,
     pub area: f64, // polygon ring area
 }
 
 impl VtLinearRing {
-    pub fn new() -> VtLinearRing {
-        Self {
-            elements: vec![],
-            area: 0.0,
-        }
-    }
     pub fn from_slice(points: &[VtPoint]) -> VtLinearRing {
         Self {
             elements: Vec::from(points),
@@ -224,7 +150,7 @@ impl VtFeature {
         feature.process_geometry();
         if feature.num_points == 0 {
             // TODO: Is this the right place to filter for empty?
-            return None;
+            None
         } else {
             Some(feature)
         }
@@ -296,3 +222,61 @@ impl VtFeature {
 }
 
 pub type VtFeatures = Vec<VtFeature>;
+
+
+// Function templates to get coordinates
+pub trait GetCoordinate<const I: usize> {
+    fn get(&self) -> f64;
+}
+
+impl<const I: usize> GetCoordinate<I> for VtPoint {
+    fn get(&self) -> f64 {
+        match I {
+            0 => self.x,
+            1 => self.y,
+            _ => {
+                panic!("GetCoordinate is only implemented for I = 0 and I = 1")
+            }
+        }
+    }
+}
+
+impl<const I: usize> GetCoordinate<I> for Point2D<f64, UnknownUnit> {
+    fn get(&self) -> f64 {
+        match I {
+            0 => self.x,
+            1 => self.y,
+            _ => {
+                panic!("GetCoordinate is only implemented for I = 0 and I = 1")
+            }
+        }
+    }
+}
+
+// Calculation of progress along a line
+pub fn calc_progress<const I: usize>(a: &VtPoint, b: &VtPoint, v: f64) -> f64 {
+    match I {
+        0 => (v - a.x) / (b.x - a.x),
+        1 => (v - a.y) / (b.y - a.y),
+        _ => {
+            panic!("calc_progress is only implemented for I = 0 and I = 1")
+        }
+    }
+}
+
+// Intersection calculation based on linear interpolation
+pub fn intersect<const I: usize>(a: &VtPoint, b: &VtPoint, v: f64, t: f64) -> VtPoint {
+    match I {
+        0 => {
+            let y = (b.y - a.y) * t + a.y;
+            VtPoint::new(v, y, 1.0)
+        }
+        1 => {
+            let x = (b.x - a.x) * t + a.x;
+            VtPoint::new(x, v, 1.0)
+        }
+        _ => {
+            panic!("calc_progress is only implemented for I = 0 and I = 1")
+        }
+    }
+}

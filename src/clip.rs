@@ -1,14 +1,5 @@
-use crate::types::{
-    calc_progress, intersect, GetCoordinate, VtEmpty, VtFeature, VtFeatures, VtGeometry,
-    VtGeometryCollection, VtLineString, VtLinearRing, VtMultiLineString, VtMultiPoint,
-    VtMultiPolygon, VtPoint, VtPolygon,
-};
+use crate::types::*;
 
-trait IsTrue<const B: bool> {}
-
-impl IsTrue<true> for () {}
-
-// Define a generic clipper struct templated with a constant index.
 pub struct Clipper<const I: usize> {
     k1: f64,
     k2: f64,
@@ -24,12 +15,12 @@ impl<const I: usize> Clipper<I> {
         }
     }
 
-    pub fn clip_empty(&self, empty: &VtEmpty) -> VtGeometry {
-        return VtGeometry::Empty(*empty);
+    pub fn clip_empty(&self) -> VtGeometry {
+        VtGeometry::Empty(())
     }
 
     pub fn clip_point(&self, point: &VtPoint) -> VtGeometry {
-        return VtGeometry::Point(*point);
+        VtGeometry::Point(*point)
     }
 
     pub fn clip_multi_point(&self, points: &VtMultiPoint) -> VtGeometry {
@@ -40,7 +31,7 @@ impl<const I: usize> Clipper<I> {
                 part.push(*p);
             }
         }
-        return VtGeometry::MultiPoint(part);
+        VtGeometry::MultiPoint(part)
     }
 
     pub fn clip_line_string(&self, line: &VtLineString) -> VtGeometry {
@@ -51,7 +42,7 @@ impl<const I: usize> Clipper<I> {
             return VtGeometry::LineString(parts[0].clone());
         }
 
-        return VtGeometry::MultiLineString(parts.clone());
+        VtGeometry::MultiLineString(parts.clone())
     }
 
     pub fn clip_multi_line_string(&self, lines: &VtMultiLineString) -> VtGeometry {
@@ -64,7 +55,7 @@ impl<const I: usize> Clipper<I> {
             return VtGeometry::LineString(parts[0].clone());
         }
 
-        return VtGeometry::MultiLineString(parts.clone());
+        VtGeometry::MultiLineString(parts.clone())
     }
 
     pub fn clip_polygon(&self, polygon: &VtPolygon) -> VtGeometry {
@@ -75,7 +66,7 @@ impl<const I: usize> Clipper<I> {
                 result.push(new_ring);
             }
         }
-        return VtGeometry::Polygon(result);
+        VtGeometry::Polygon(result)
     }
 
     pub fn clip_multi_polygon(&self, polygons: &VtMultiPolygon) -> VtGeometry {
@@ -92,7 +83,7 @@ impl<const I: usize> Clipper<I> {
                 result.push(p.clone());
             }
         }
-        return VtGeometry::MultiPolygon(result);
+        VtGeometry::MultiPolygon(result)
     }
 
     pub fn clip_geometry_collection(&self, geometries: &VtGeometryCollection) -> VtGeometry {
@@ -101,11 +92,11 @@ impl<const I: usize> Clipper<I> {
             // TODO: verify if translated correctly
             result.push(self.clip_geometry(geometry));
         }
-        return VtGeometry::GeometryCollection(result);
+        VtGeometry::GeometryCollection(result)
     }
     fn clip_geometry(&self, geometry: &VtGeometry) -> VtGeometry {
         match geometry {
-            VtGeometry::Empty(empty) => self.clip_empty(empty),
+            VtGeometry::Empty(_empty) => self.clip_empty(),
             VtGeometry::Point(point) => self.clip_point(point),
             VtGeometry::MultiPoint(multi_point) => self.clip_multi_point(multi_point),
             VtGeometry::LineString(line_string) => self.clip_line_string(line_string),
@@ -123,21 +114,23 @@ impl<const I: usize> Clipper<I> {
 
 impl<const I: usize> Clipper<I> {
     fn new_slice(&self, line: &VtLineString) -> VtLineString {
-        let mut slice: VtLineString = VtLineString::new();
-        slice.dist = line.dist;
+        let mut slice: VtLineString = VtLineString {
+            dist: line.dist, 
+            ..Default::default()
+        };
+        
         if self.line_metrics {
             slice.seg_start = line.seg_start;
             slice.seg_end = line.seg_end;
         }
-        return slice;
+        slice
     }
-
-    // Mimic the clipLine function from C++
+    
     fn clip_line(&self, line: &VtLineString, slices: &mut Vec<VtLineString>) {
         let len = line.elements.len();
-        let mut lineLen = line.seg_start;
-        let mut segLen = 0.0;
-        let mut t = 0.0;
+        let mut line_len = line.seg_start;
+        let mut seg_len = 0.0;
+        let mut t;
 
         if len < 2 {
             return;
@@ -150,10 +143,10 @@ impl<const I: usize> Clipper<I> {
             let b = line.elements[i + 1];
             let ak = GetCoordinate::<I>::get(&a);
             let bk = GetCoordinate::<I>::get(&b);
-            let isLastSeg = i == (len - 2);
+            let is_last_seg = i == (len - 2);
 
             if self.line_metrics {
-                segLen = (b.x - a.x).hypot(b.y - a.y);
+                seg_len = (b.x - a.x).hypot(b.y - a.y);
             }
 
             if ak < self.k1 {
@@ -162,13 +155,13 @@ impl<const I: usize> Clipper<I> {
                     t = calc_progress::<I>(&a, &b, self.k1);
                     slice.elements.push(intersect::<I>(&a, &b, self.k1, t));
                     if self.line_metrics {
-                        slice.seg_start = lineLen + segLen * t;
+                        slice.seg_start = line_len + seg_len * t;
                     }
 
                     t = calc_progress::<I>(&a, &b, self.k2);
                     slice.elements.push(intersect::<I>(&a, &b, self.k2, t));
                     if self.line_metrics {
-                        slice.seg_end = lineLen + segLen * t;
+                        slice.seg_end = line_len + seg_len * t;
                     }
                     slices.push(slice);
 
@@ -178,15 +171,15 @@ impl<const I: usize> Clipper<I> {
                     t = calc_progress::<I>(&a, &b, self.k1);
                     slice.elements.push(intersect::<I>(&a, &b, self.k1, t));
                     if self.line_metrics {
-                        slice.seg_start = lineLen + segLen * t;
+                        slice.seg_start = line_len + seg_len * t;
                     }
-                    if isLastSeg {
+                    if is_last_seg {
                         slice.elements.push(b); // last point
                     }
-                } else if bk == self.k1 && !isLastSeg {
+                } else if bk == self.k1 && !is_last_seg {
                     // --->|..  |
                     if self.line_metrics {
-                        slice.seg_start = lineLen + segLen;
+                        slice.seg_start = line_len + seg_len;
                     }
                     slice.elements.push(b);
                 }
@@ -196,13 +189,13 @@ impl<const I: usize> Clipper<I> {
                     t = calc_progress::<I>(&a, &b, self.k2);
                     slice.elements.push(intersect::<I>(&a, &b, self.k2, t));
                     if self.line_metrics {
-                        slice.seg_start = lineLen + segLen * t;
+                        slice.seg_start = line_len + seg_len * t;
                     }
 
                     t = calc_progress::<I>(&a, &b, self.k1);
                     slice.elements.push(intersect::<I>(&a, &b, self.k1, t));
                     if self.line_metrics {
-                        slice.seg_end = lineLen + segLen * t;
+                        slice.seg_end = line_len + seg_len * t;
                     }
 
                     slices.push(slice);
@@ -213,15 +206,15 @@ impl<const I: usize> Clipper<I> {
                     t = calc_progress::<I>(&a, &b, self.k2);
                     slice.elements.push(intersect::<I>(&a, &b, self.k2, t));
                     if self.line_metrics {
-                        slice.seg_start = lineLen + segLen * t;
+                        slice.seg_start = line_len + seg_len * t;
                     }
-                    if isLastSeg {
+                    if is_last_seg {
                         slice.elements.push(b); // last point
                     }
-                } else if bk == self.k2 && !isLastSeg {
+                } else if bk == self.k2 && !is_last_seg {
                     // |  ..|<---
                     if self.line_metrics {
-                        slice.seg_start = lineLen + segLen;
+                        slice.seg_start = line_len + seg_len;
                     }
                     slice.elements.push(b);
                 }
@@ -233,7 +226,7 @@ impl<const I: usize> Clipper<I> {
                     t = calc_progress::<I>(&a, &b, self.k1);
                     slice.elements.push(intersect::<I>(&a, &b, self.k1, t));
                     if self.line_metrics {
-                        slice.seg_end = lineLen + segLen * t;
+                        slice.seg_end = line_len + seg_len * t;
                     }
                     slices.push(slice);
                     slice = self.new_slice(line);
@@ -242,25 +235,25 @@ impl<const I: usize> Clipper<I> {
                     t = calc_progress::<I>(&a, &b, self.k2);
                     slice.elements.push(intersect::<I>(&a, &b, self.k2, t));
                     if self.line_metrics {
-                        slice.seg_end = lineLen + segLen * t;
+                        slice.seg_end = line_len + seg_len * t;
                     }
                     slices.push(slice);
                     slice = self.new_slice(line);
-                } else if isLastSeg {
+                } else if is_last_seg {
                     // | --> |
                     slice.elements.push(b);
                 }
             }
 
             if self.line_metrics {
-                lineLen += segLen;
+                line_len += seg_len;
             }
         }
 
         if !slice.elements.is_empty() {
             // add the final slice
             if self.line_metrics {
-                slice.seg_end = lineLen;
+                slice.seg_end = line_len;
             }
             slices.push(slice);
         }
@@ -269,9 +262,11 @@ impl<const I: usize> Clipper<I> {
     // Mimic the clipRing function from C++
     fn clip_ring(&self, ring: &VtLinearRing) -> VtLinearRing {
         let len = ring.elements.len();
-        let mut slice = VtLinearRing::new();
-        slice.area = ring.area;
-
+        let mut slice = VtLinearRing {
+            area: ring.area,
+            ..Default::default() 
+        };
+        
         if len < 2 {
             return slice;
         }
@@ -357,7 +352,7 @@ impl<const I: usize> Clipper<I> {
             }
         }
 
-        return slice;
+        slice
     }
 }
 
@@ -382,15 +377,13 @@ pub fn clip<const I: usize>(
 
     // trivial reject
     if max_all < k1 || min_all >= k2 {
-        return VtFeatures::new(); // TODO or none?
+        return VtFeatures::new();
     }
 
-    let mut clipped: VtFeatures = Vec::new();
-    clipped.reserve(features.len());
+    let mut clipped: VtFeatures = Vec::with_capacity(features.len());
 
     for feature in features {
         let geom = &feature.geometry;
-        // TODO: assert!(feature.properties);
         let props = &feature.properties;
         let id = &feature.id;
 
@@ -404,7 +397,6 @@ pub fn clip<const I: usize>(
             // trivial reject
             continue;
         } else {
-            // TODO: verify if translated correctly - good
             let clipped_geom = Clipper::<I>::new(k1, k2, line_metrics).clip_geometry(geom);
 
             match &clipped_geom {
@@ -437,5 +429,5 @@ pub fn clip<const I: usize>(
         }
     }
 
-    return clipped;
+    clipped
 }

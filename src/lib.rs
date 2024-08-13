@@ -1,15 +1,16 @@
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+
+use euclid::{Point2D, UnknownUnit};
+use geojson::{
+    Feature, FeatureCollection, GeoJson, Geometry, LineStringType, PointType, PolygonType,
+};
+
 use crate::clip::clip;
 use crate::convert::convert;
 use crate::tile::{InternalTile, Tile, EMPTY_TILE};
-use crate::types::VtFeatures;
+use crate::types::*;
 use crate::wrap::wrap;
-use euclid::{Point2D, UnknownUnit};
-use geojson::{
-    Feature, FeatureCollection, GeoJson, Geometry, JsonObject, LineStringType, PointType,
-    PolygonType,
-};
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
 
 mod clip;
 mod convert;
@@ -44,7 +45,7 @@ impl Default for TileOptions {
 
 #[derive(Clone)]
 pub struct Options {
-    pub max_zoom: u8,          // max zoom to preserve detail on
+    pub max_zoom: u8,          // max zoom to preserve detail on; can't be higher than 24
     pub index_max_zoom: u8,    // max zoom in the tile index
     pub index_max_points: u32, // max number of points per tile in the tile index
     pub generate_id: bool,     // whether to generate feature ids, overriding existing ids
@@ -53,7 +54,7 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Self {
+        Options {
             max_zoom: 18,
             index_max_zoom: 5,
             index_max_points: 100000,
@@ -64,7 +65,7 @@ impl Default for Options {
 }
 
 pub fn to_id(z: u8, x: u32, y: u32) -> u64 {
-    return (((1u64 << z as u64) * y as u64 + x as u64) * 32) + z as u64;
+    (((1u64 << z as u64) * y as u64 + x as u64) * 32) + z as u64
 }
 
 fn geojson_to_feature_collection(geojson: &GeoJson) -> FeatureCollection {
@@ -110,6 +111,7 @@ pub fn geojson_to_tile(
             options.line_metrics,
         );
     }
+
     if clip_ || options.line_metrics {
         let p = options.buffer as f64 / options.extent as f64;
 
@@ -130,7 +132,8 @@ pub fn geojson_to_tile(
             options.line_metrics,
         );
     }
-    return InternalTile::new(
+
+    InternalTile::new(
         &features,
         z,
         x,
@@ -139,13 +142,13 @@ pub fn geojson_to_tile(
         tolerance,
         options.line_metrics,
     )
-    .tile;
+    .tile
 }
 
 pub struct GeoJSONVT {
-    pub options: Options,
-    pub stats: HashMap<u8, u32>,
-    pub total: u32,
+    options: Options,
+    stats: HashMap<u8, u32>,
+    total: u32,
     tiles: HashMap<u64, InternalTile>,
 }
 
@@ -154,20 +157,23 @@ impl GeoJSONVT {
         let collection = geojson_to_feature_collection(geojson);
         Self::new(&collection, options)
     }
+
     pub fn new(features_: &FeatureCollection, options: &Options) -> Self {
         let mut vt = Self {
             options: options.clone(),
-            stats: Default::default(),
+            stats: HashMap::default(),
             total: 0,
-            tiles: Default::default(),
+            tiles: HashMap::default(),
         };
+
         let z2 = 1u32 << options.max_zoom;
 
         let converted = convert(
             features_,
-            (options.tile.tolerance as f64 / options.tile.extent as f64) / z2 as f64,
+            (options.tile.tolerance / options.tile.extent as f64) / z2 as f64,
             options.generate_id,
         );
+
         let features = wrap(
             &converted,
             options.tile.buffer as f64 / options.tile.extent as f64,
@@ -209,18 +215,18 @@ impl GeoJSONVT {
                 return &self.tiles[&id].tile;
             }
 
-            if let None = self.find_parent(z, x, y) {
+            if self.find_parent(z, x, y).is_none() {
                 panic!("Parent tile not found");
             }
         } else {
             panic!("Parent tile not found");
         }
 
-        return &EMPTY_TILE;
+        &EMPTY_TILE
     }
 
     pub fn get_internal_tiles(&self) -> &HashMap<u64, InternalTile> {
-        return &self.tiles;
+        &self.tiles
     }
 
     fn find_parent(&self, z: u8, x: u32, y: u32) -> Option<&InternalTile> {
@@ -233,17 +239,18 @@ impl GeoJSONVT {
 
         while (parent == end) && (z0 != 0) {
             z0 -= 1;
-            x0 = x0 / 2;
-            y0 = y0 / 2;
+            x0 /= 2;
+            y0 /= 2;
             parent = self.tiles.get(&to_id(z0, x0, y0));
         }
 
-        return parent;
+        parent
     }
 
     fn split_tile_zeros(&mut self, features: &VtFeatures, z: u8, x: u32, y: u32) {
         self.split_tile(features, z, x, y, 0, 0, 0)
     }
+
     fn split_tile(
         &mut self,
         features: &VtFeatures,
@@ -295,8 +302,6 @@ impl GeoJSONVT {
         if features.is_empty() {
             eprintln!("no feature");
             return;
-        } else {
-            //eprintln!("{:?}", features)
         }
 
         // if it's the first-pass tiling
@@ -364,6 +369,7 @@ impl GeoJSONVT {
             cx,
             cy,
         );
+
         self.split_tile(
             &clip::<1>(
                 &left,
@@ -382,7 +388,7 @@ impl GeoJSONVT {
         );
 
         let right = clip::<0>(
-            &features,
+            features,
             (x as f64 + 0.5 - p) / z2,
             (x as f64 + 1. + p) / z2,
             min.x,
@@ -406,6 +412,7 @@ impl GeoJSONVT {
             cx,
             cy,
         );
+
         self.split_tile(
             &clip::<1>(
                 &right,
@@ -427,6 +434,14 @@ impl GeoJSONVT {
         // TODO Cleanup, dont fetch twice
         let tile = self.tiles.get_mut(&id).expect("can no longer be None");
         tile.source_features = Vec::new();
+    }
+
+    pub fn stats(&self) -> &HashMap<u8, u32> {
+        &self.stats
+    }
+
+    pub fn total(&self) -> u32 {
+        self.total
     }
 }
 

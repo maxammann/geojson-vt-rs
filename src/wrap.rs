@@ -1,5 +1,5 @@
 use crate::clip::clip;
-use crate::types::{for_each_point, VtFeatures, VtGeometry, VtPoint};
+use crate::types::*;
 
 // Function to shift coordinates of features
 pub fn shift_coords(features: &mut VtFeatures, offset: f64) {
@@ -39,5 +39,5 @@ pub fn wrap(features: &VtFeatures, buffer: f64, line_metrics: bool) -> VtFeature
         shift_coords(&mut right, -1.0);
         merged.extend(right);
     }
-    return merged;
+    merged
 }

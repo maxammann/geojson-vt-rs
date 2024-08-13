@@ -1,25 +1,25 @@
-use crate::simplify::{simplify, simplify_wrapper};
+use std::f64::consts::PI;
+
+use geojson::feature::Id;
+use geojson::{FeatureCollection, Geometry, LineStringType, PointType, PolygonType, Value};
+use serde_json::Number;
+
+use crate::simplify::simplify_wrapper;
 use crate::types::{
     VtEmpty, VtFeature, VtFeatures, VtGeometry, VtGeometryCollection, VtLineString, VtLinearRing,
     VtMultiLineString, VtMultiPoint, VtMultiPolygon, VtPoint, VtPolygon,
 };
 use crate::{LinearRingType, MultiLineStringType, MultiPointType, MultiPolygonType};
-use euclid::approxeq::ApproxEq;
-use geojson::feature::Id;
-use geojson::{
-    Feature, FeatureCollection, Geometry, LineStringType, PointType, PolygonType, Value,
-};
-use serde_json::Number;
-use std::f64::consts::PI;
 
 pub struct Project {
     pub tolerance: f64,
 }
 
 impl Project {
-    // TODO pub fn project_empty(&self, empty: EmptyType) -> VtEmpty {
-    //     return empty;
-    // }
+    
+    // TODO
+    pub fn project_empty(&self) -> VtEmpty {
+    }
 
     pub fn project_point(&self, p: PointType) -> VtPoint {
         let sine = (p[1] * PI / 180.).sin();
@@ -27,11 +27,11 @@ impl Project {
         let y = (0.5 - 0.25 * ((1. + sine) / (1. - sine)).ln() / PI)
             .min(1.0)
             .max(0.0);
-        return VtPoint { x, y, z: 0.0 };
+        VtPoint { x, y, z: 0.0 }
     }
 
     pub fn project_line_string(&self, points: LineStringType) -> VtLineString {
-        let mut result = VtLineString::new();
+        let mut result = VtLineString::default();
         let len = points.len();
 
         if len == 0 {
@@ -55,11 +55,11 @@ impl Project {
         result.seg_start = 0.;
         result.seg_end = result.dist;
 
-        return result;
+        result
     }
 
     pub fn project_linear_ring(&self, ring: LinearRingType) -> VtLinearRing {
-        let mut result: VtLinearRing = VtLinearRing::new();
+        let mut result: VtLinearRing = VtLinearRing::default();
         let len = ring.len();
 
         if len == 0 {
@@ -72,7 +72,7 @@ impl Project {
             result.elements.push(self.project_point(p));
         }
 
-        let mut area = 0.0;
+        let mut area: f64 = 0.0;
 
         for i in 0..len - 1 {
             let a = result.elements[i];
@@ -83,11 +83,10 @@ impl Project {
 
         simplify_wrapper(&mut result.elements, self.tolerance);
 
-        return result;
+        result
     }
 
     pub fn project_geometry(&self, geometry: &Geometry) -> VtGeometry {
-        // TODO check if this is correct
         match &geometry.value {
             Value::Point(value) => VtGeometry::Point(self.project_point(value.clone())),
             Value::MultiPoint(value) => VtGeometry::MultiPoint(self.project_multi_point(value)),
@@ -108,77 +107,72 @@ impl Project {
     }
 
     pub fn project_multi_point(&self, vector: &MultiPointType) -> VtMultiPoint {
-        let mut result = Vec::new();
-        result.reserve(vector.len());
+        let mut result = Vec::with_capacity(vector.len());
         for e in vector {
             result.push(self.project_point(e.clone()));
         }
-        return result;
+        result
     }
 
     pub fn project_multi_line_string(&self, vector: &MultiLineStringType) -> VtMultiLineString {
-        let mut result = Vec::new();
-        result.reserve(vector.len());
+        let mut result = Vec::with_capacity(vector.len());
         for e in vector {
             result.push(self.project_line_string(e.clone()));
         }
-        return result;
+        result
     }
 
     pub fn project_multi_polygon(&self, vector: &MultiPolygonType) -> VtMultiPolygon {
-        let mut result = Vec::new();
-        result.reserve(vector.len());
+        let mut result = Vec::with_capacity(vector.len());
         for e in vector {
             result.push(self.project_polygon(e));
         }
-        return result;
+        result
     }
 
     pub fn project_polygon(&self, vector: &PolygonType) -> VtPolygon {
-        let mut result = Vec::new();
-        result.reserve(vector.len());
+        let mut result = Vec::with_capacity(vector.len());
         for e in vector {
             result.push(self.project_linear_ring(e.clone()));
         }
-        return result;
+        result
     }
     fn project_geometry_collection(&self, vector: &Vec<Geometry>) -> VtGeometryCollection {
         // TODO: verify if translated correctly
-        let mut result = Vec::new();
-        result.reserve(vector.len());
+        let mut result = Vec::with_capacity(vector.len());
         for e in vector {
             result.push(self.project_geometry(e));
         }
-        return result;
+        result
     }
 }
 
 pub fn convert(features: &FeatureCollection, tolerance: f64, generate_id: bool) -> VtFeatures {
-    let mut projected = Vec::new();
-    projected.reserve(features.features.len());
-    let mut genId: u64 = 0;
+    let mut projected = Vec::with_capacity(features.features.len());
+
+    let mut gen_id: u64 = 0;
     for feature in features {
-        let mut featureId = feature.id.clone();
+        let mut feature_id = feature.id.clone();
         if generate_id {
-            featureId = Some(Id::Number(Number::from(genId)));
-            genId = genId + 1;
+            feature_id = Some(Id::Number(Number::from(gen_id)));
+            gen_id += 1;
         }
 
         let project = Project { tolerance };
 
         let feature = VtFeature::new(
-            project.project_geometry(&feature.geometry.as_ref().unwrap()),
+            project.project_geometry(feature.geometry.as_ref().unwrap()),
             feature
                 .properties
                 .clone()
                 .unwrap_or_default()
                 .into_iter()
                 .collect(), // TODO is this unwrapping oke?
-            featureId.clone(),
+            feature_id.clone(),
         );
         if let Some(feature) = feature {
             projected.push(feature);
         }
     }
-    return projected;
+    projected
 }

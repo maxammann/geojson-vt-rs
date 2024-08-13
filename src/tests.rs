@@ -1,23 +1,25 @@
-use crate::clip::Clipper;
-use crate::simplify::{simplify, simplify_wrapper};
-use crate::tile::EMPTY_TILE;
-use crate::types::{
-    VtGeometry, VtLineString, VtLinearRing, VtMultiLineString, VtMultiPoint, VtPoint, VtPolygon,
-};
-use crate::{
-    convert, geojson_to_tile, GeoJSONVT, LinearRingType, MultiLineStringType, Options, TileOptions,
-};
-use euclid::approxeq::ApproxEq;
-use geojson::feature::Id;
-use geojson::{Feature, FeatureCollection, GeoJson, Geometry, JsonObject, JsonValue, LineStringType, PointType, PolygonType, Position};
-use serde::de::Unexpected::Str;
-use serde_json::{Number, Value};
 use std::collections::HashMap;
 use std::f64::consts::PI;
-use std::{fmt, fs};
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::str::FromStr;
+use approx::UlpsEq;
+
+use euclid::approxeq::ApproxEq;
+use geojson::{
+    Feature, FeatureCollection, GeoJson, Geometry, JsonValue, LineStringType,
+    PointType, PolygonType, Position,
+};
+use geojson::feature::Id;
+use serde_json::{Number, Value};
+
+use crate::{
+    geojson_to_tile, GeoJSONVT, LinearRingType, MultiLineStringType, Options, TileOptions,
+};
+use crate::clip::Clipper;
+use crate::simplify::simplify_wrapper;
+use crate::tile::EMPTY_TILE;
+use crate::types::*;
 
 macro_rules! points {
     // Match a block containing tuples separated by commas
@@ -27,24 +29,6 @@ macro_rules! points {
             $( VtPoint::new_without_z($x as f64, $y as f64), )*
         ]
     };
-}
-
-fn ulps_eq(it: &f64, other: &f64, max_ulps: u32) -> bool {
-    // Adapted from https://github.com/brendanzab/approx
-    // Implementation based on: [Comparing Floating Point Numbers, 2012 Edition]
-    // (https://randomascii.wordpress.com/2012/02/25/comparing-floating-point-numbers-2012-edition/)
-
-    // Trivial negative sign check
-    if it.signum() != other.signum() {
-        // Handle -0 == +0
-        return it == other;
-    }
-
-    let int_self: i64 = unsafe { std::mem::transmute(*it) };
-    let int_other: i64 = unsafe { std::mem::transmute(*other) };
-
-    let a = i64::abs(int_self - int_other);
-    a < max_ulps as i64
 }
 
 fn multi_line_string_eq((a, b): (&VtMultiLineString, &VtMultiLineString)) -> bool {
@@ -62,24 +46,25 @@ fn linear_ring_eq((a, b): (&VtLinearRing, &VtLinearRing)) -> bool {
 fn points_eq((a, b): (&[VtPoint], &[VtPoint])) -> bool {
     a.iter()
         .zip(b.iter())
-        .all(|(a, b)| ulps_eq(&a.x, &b.x, 4) && ulps_eq(&a.y, &b.y, 4))
+        .all(|(a, b)| (&a.x).ulps_eq(&b.x, 0.0, 4) && (&a.y).ulps_eq(&b.y, 0.0, 4))
 }
 
 fn polygon_eq((a, b): (&VtPolygon, &VtPolygon)) -> bool {
     a.iter().zip(b.iter()).all(linear_ring_eq)
 }
-fn parseJSONTiles(tiles: JsonValue) -> HashMap<String, FeatureCollection> {
+
+fn parse_jsontiles(tiles: JsonValue) -> HashMap<String, FeatureCollection> {
     let Value::Object(tiles) = tiles else {
         panic!("not a valid tiles file");
     };
 
     tiles
         .into_iter()
-        .map(|(key, value)| (key, parseJSONTile(value)))
+        .map(|(key, value)| (key, parse_jsontile(value)))
         .collect()
 }
 
-fn parseJSONTile(tile: JsonValue) -> FeatureCollection {
+fn parse_jsontile(tile: JsonValue) -> FeatureCollection {
     let mut features = Vec::new();
     assert!(matches!(tile, JsonValue::Array(_)));
 
@@ -88,7 +73,7 @@ fn parseJSONTile(tile: JsonValue) -> FeatureCollection {
     };
 
     for feature in tile_features {
-        let mut feat = geojson::Feature {
+        let mut feat = Feature {
             bbox: None,
             geometry: None,
             id: None,
@@ -101,42 +86,6 @@ fn parseJSONTile(tile: JsonValue) -> FeatureCollection {
                 feat.properties = None;
             } else {
                 feat.properties = Some(tile_feature.clone());
-            }
-
-            for (name, value) in tile_feature.iter() {
-                /*match value {
-
-                    Value::Null => {
-                        feat.properties.unwrap().insert(name.to_string(), Value::Null);
-                    }
-                    Value::Bool(value) => {
-                        if value {
-                            feat.properties.emplace(tagKey, true);
-                        } else {
-                            feat.properties.emplace(tagKey, false);
-                        }
-
-                    }
-                    Value::Number(_) => {
-                        if (jt->value.IsUint64()) {
-                            feat.properties.emplace(tagKey, std::uint64_t(jt->value.GetUint64()));
-                        } else if (jt->value.IsInt64()) {
-                            feat.properties.emplace(tagKey, std::int64_t(jt->value.GetInt64()));
-                        } else {
-                            feat.properties.emplace(tagKey, jt->value.GetDouble());
-                        }
-                    }
-                    Value::String(_) => {
-                        feat.properties.emplace(
-                            tagKey, std::string{ jt->value.GetString(), jt->value.GetStringLength() });
-                    }
-                    Value::Array(_) => {
-                        panic!("invalid JSON type")
-                    }
-                    Value::Object(_) => {
-                        panic!("invalid JSON type")
-                    }
-                }*/
             }
         }
 
@@ -151,9 +100,9 @@ fn parseJSONTile(tile: JsonValue) -> FeatureCollection {
         if let (Some(JsonValue::Number(tile_type)), Some(JsonValue::Array(tile_geom))) =
             (feature.get("type"), feature.get("geometry"))
         {
-            let geomType = tile_type.as_i64().unwrap();
+            let geom_type = tile_type.as_i64().unwrap();
             // point geometry
-            if (geomType == 1) {
+            if geom_type == 1 {
                 if tile_geom.len() == 1 {
                     let pt = tile_geom.first().unwrap();
                     assert_eq!(pt.as_array().unwrap().len(), 2);
@@ -171,25 +120,20 @@ fn parseJSONTile(tile: JsonValue) -> FeatureCollection {
                     }
                     feat.geometry = Some(Geometry::new(geojson::Value::MultiPoint(points)))
                 }
-
+            } else if geom_type == 2 {
                 // linestring geometry
-            } else if (geomType == 2) {
                 let mut multi_line: MultiLineStringType = Vec::new();
                 let is_multi = tile_geom.len() > 1;
                 for part in tile_geom {
-                    //EXPECT_TRUE(part.IsArray());
                     let mut line_string: LineStringType = Vec::new();
                     for pt in part.as_array().unwrap() {
-                        //EXPECT_TRUE(pt.IsArray());
-                        //EXPECT_TRUE(pt.Size() >= 2);
-                        //EXPECT_TRUE(pt[0].IsNumber());
-                        //EXPECT_TRUE(pt[1].IsNumber());
+                        assert_eq!(pt.as_array().unwrap().len(), 2);
                         line_string.push(PointType::from(&[
                             pt.get(0).unwrap().as_f64().unwrap(),
                             pt.get(1).unwrap().as_f64().unwrap(),
                         ]));
                     }
-                    if (!is_multi) {
+                    if !is_multi {
                         feat.geometry =
                             Some(Geometry::new(geojson::Value::LineString(line_string)));
                         break;
@@ -198,22 +142,17 @@ fn parseJSONTile(tile: JsonValue) -> FeatureCollection {
                     }
                 }
 
-                if (is_multi) {
+                if is_multi {
                     feat.geometry =
                         Some(Geometry::new(geojson::Value::MultiLineString(multi_line)));
                 }
-
+            } else if geom_type == 3 {
                 // polygon geometry
-            } else if (geomType == 3) {
                 let mut poly: PolygonType = Vec::new();
                 for ring in tile_geom {
-                    //EXPECT_TRUE(ring.IsArray());
                     let mut linear_ring: LinearRingType = Vec::new();
                     for pt in ring.as_array().unwrap() {
-                        //EXPECT_TRUE(pt.IsArray());
-                        //EXPECT_TRUE(pt.Size() >= 2);
-                        //EXPECT_TRUE(pt[0].IsNumber());
-                        //EXPECT_TRUE(pt[1].IsNumber());
+                        assert_eq!(pt.as_array().unwrap().len(), 2);
                         linear_ring.push(PointType::from(&[
                             pt.get(0).unwrap().as_f64().unwrap(),
                             pt.get(1).unwrap().as_f64().unwrap(),
@@ -222,6 +161,8 @@ fn parseJSONTile(tile: JsonValue) -> FeatureCollection {
                     poly.push(linear_ring);
                 }
                 feat.geometry = Some(Geometry::new(geojson::Value::Polygon(poly)));
+            } else {
+                panic!("unknown geometry type")
             }
         }
 
@@ -230,7 +171,7 @@ fn parseJSONTile(tile: JsonValue) -> FeatureCollection {
 
     return FeatureCollection {
         bbox: None,
-        features: features,
+        features,
         foreign_members: None,
     };
 }
@@ -356,11 +297,12 @@ fn clip_polylines() {
 
 #[test]
 fn clip_polylines_metric() {
-    let points1 =
-        VtLineString::from_slice(&points! { { 0, 0 },   { 50, 0 },  { 50, 10 }, { 20, 10 },
+    let points1 = VtLineString::from_slice(&points! {
+        { 0, 0 },   { 50, 0 },  { 50, 10 }, { 20, 10 },
         { 20, 20 }, { 30, 20 }, { 30, 30 }, { 50, 30 },
         { 50, 40 }, { 25, 40 }, { 25, 50 }, { 0, 50 },
-        { 0, 60 },  { 25, 60 } });
+        { 0, 60 },  { 25, 60 }
+    });
 
     let clip = Clipper::<0>::new(10., 40., true);
 
@@ -436,10 +378,12 @@ fn clip_polygons() {
 
 #[test]
 fn clip_points() {
-    let points1 = VtMultiPoint::from(points! { { 0, 0 },   { 50, 0 },  { 50, 10 }, { 20, 10 },
-    { 20, 20 }, { 30, 20 }, { 30, 30 }, { 50, 30 },
-    { 50, 40 }, { 25, 40 }, { 25, 50 }, { 0, 50 },
-    { 0, 60 },  { 25, 60 } });
+    let points1 = VtMultiPoint::from(points! {
+        { 0, 0 },   { 50, 0 },  { 50, 10 }, { 20, 10 },
+        { 20, 20 }, { 30, 20 }, { 30, 30 }, { 50, 30 },
+        { 50, 40 }, { 25, 40 }, { 25, 50 }, { 0, 50 },
+        { 0, 60 },  { 25, 60 }
+    });
 
     let points2 = VtMultiPoint::from(points! { { 0, 0 }, { 50, 0 }, { 50, 10 }, { 0, 10 } });
 
@@ -449,7 +393,8 @@ fn clip_points() {
     let clipped2 = clip.clip_multi_point(&points2);
 
     let expected1 = VtMultiPoint::from(points! {
-    { 20, 10 }, { 20, 20 }, { 30, 20 }, { 30, 30 }, { 25, 40 }, { 25, 50 }, { 25, 60 } });
+        { 20, 10 }, { 20, 20 }, { 30, 20 }, { 30, 30 }, { 25, 40 }, { 25, 50 }, { 25, 60 }
+    });
     let expected2 = VtMultiPoint::from(points! {});
 
     assert!(points_eq((&expected1, &clipped1.multi_point().unwrap())));
@@ -465,12 +410,12 @@ fn get_tile_us_states() {
     let mut index = GeoJSONVT::from_geojson(&geojson, &Options::default());
 
     let features = &index.get_tile(7, 37, 48).features;
-    let expected = parseJSONTile(
+    let expected = parse_jsontile(
         serde_json::from_reader(File::open("fixtures/us-states-z7-37-48.json").unwrap()).unwrap(),
     );
     assert_eq!(features, &expected);
 
-    let square = parseJSONTile(
+    let square = parse_jsontile(
         serde_json::from_reader(File::open("fixtures/us-states-square.json").unwrap()).unwrap(),
     );
     let features = &index.get_tile(9, 148, 192).features;
@@ -479,7 +424,7 @@ fn get_tile_us_states() {
     assert_eq!(&EMPTY_TILE == index.get_tile(11, 800, 400), true); // non-existing tile
     assert_eq!(&EMPTY_TILE == index.get_tile(11, 800, 400), true); // non-existing tile
 
-    // This test does not make sense in C++, since the parameters are cast to integers anyway.
+    // This test does not make sense in C++/Rust, since the parameters are cast to integers anyway.
     // assert_eq!(isEmpty(index.getTile(-5, 123.25, 400.25)), true); // invalid tile
 
     assert_eq!(37, index.total);
@@ -497,7 +442,7 @@ fn get_tile_generate_ids() {
             max_zoom: 20,
             generate_id: true,
             tile: TileOptions {
-                //tolerance: 0.0, disabling these make the test pass. Geometry is not checked in the C++ codebase
+                //tolerance: 0.0, disabling these make the test pass. Geometry is not checked in the C++ codebase, therefore the options work in the C++ version.
                 //extent: 8192,
                 ..TileOptions::default()
             },
@@ -506,7 +451,7 @@ fn get_tile_generate_ids() {
     );
 
     let features = &index.get_tile(7, 37, 48).features;
-    let expected = parseJSONTile(
+    let expected = parse_jsontile(
         serde_json::from_reader(File::open("fixtures/us-states-z7-37-48-gen-ids.json").unwrap())
             .unwrap(),
     );
@@ -536,20 +481,20 @@ fn get_tile_antimerdian_triangle() {
         y: u32,
     }
 
-    let tileCoordinates = vec![
+    let tile_coordinates = vec![
         TileCoordinate { z: 1, x: 0, y: 0 },
         TileCoordinate { z: 1, x: 0, y: 1 },
         TileCoordinate { z: 1, x: 1, y: 0 },
         TileCoordinate { z: 1, x: 1, y: 1 },
     ];
 
-    for tileCoordinate in tileCoordinates {
-        let tile = index.get_tile(tileCoordinate.z, tileCoordinate.x, tileCoordinate.y);
+    for tile_coordinate in tile_coordinates {
+        let tile = index.get_tile(tile_coordinate.z, tile_coordinate.x, tile_coordinate.y);
         assert_eq!(tile.num_points, tile.num_simplified);
         assert_eq!(
             tile.features.features.len(),
             1,
-            "{tileCoordinate:?} is missing the feature"
+            "{tile_coordinate:?} is missing the feature"
         );
     }
 }
@@ -560,6 +505,7 @@ fn get_tile_polygon_clipping_bug() {
         File::open("fixtures/polygon-bug.json").unwrap(),
     ))
     .unwrap();
+
     let mut index = GeoJSONVT::from_geojson(
         &geojson,
         &Options {
@@ -594,6 +540,7 @@ fn get_tile_projection() {
         File::open("fixtures/linestring.json").unwrap(),
     ))
     .unwrap();
+
     let mut index = GeoJSONVT::from_geojson(
         &geojson,
         &Options {
@@ -614,7 +561,7 @@ fn get_tile_projection() {
         y: u32,
     }
 
-    let tileCoordinates = vec![
+    let tile_coordinates = vec![
         TileCoordinate { z: 0, x: 0, y: 0 },
         TileCoordinate { z: 1, x: 0, y: 0 },
         TileCoordinate { z: 2, x: 0, y: 1 },
@@ -686,8 +633,8 @@ fn get_tile_projection() {
         },
     ];
 
-    for tileCoordinate in tileCoordinates {
-        let tile = index.get_tile(tileCoordinate.z, tileCoordinate.x, tileCoordinate.y);
+    for tile_coordinate in tile_coordinates {
+        let tile = index.get_tile(tile_coordinate.z, tile_coordinate.x, tile_coordinate.y);
         assert_eq!(tile.num_points, tile.num_simplified);
         assert_eq!(tile.features.features.len(), 1);
         let geometry = &tile
@@ -700,36 +647,38 @@ fn get_tile_projection() {
             .unwrap()
             .value;
 
-        let lineString = match geometry {
-            geojson::Value::LineString(lineString) => lineString,
+        let line_string = match geometry {
+            geojson::Value::LineString(line_string) => line_string,
             _ => panic!("not a linestring"),
         };
-        assert_eq!(lineString.len(), 2);
+        assert_eq!(line_string.len(), 2);
 
-        let totalFeatures = (1u32 << tileCoordinate.z) as f64 * 8192.0;
+        let total_features = (1u32 << tile_coordinate.z) as f64 * 8192.0;
 
-        let toWebMercatorLon = |point: &Position| {
-            let x0 = 8192.0 * tileCoordinate.x as f64;
-            return (x0 + point[0]) * 360.0 / totalFeatures - 180.0;
+        let to_web_mercator_lon = |point: &Position| {
+            let x0 = 8192.0 * tile_coordinate.x as f64;
+            return (x0 + point[0]) * 360.0 / total_features - 180.0;
         };
 
-        let toWebMercatorLat = |point: &Position| {
-            let y0 = 8192.0 * tileCoordinate.y as f64;
-            let y2 = 180.0 - (y0 + point[1]) * 360.0 / totalFeatures;
-            return 360.0 / PI * ((y2 * PI / 180.0).exp()).atan() - 90.0;
+        let to_web_mercator_lat = |point: &Position| {
+            let y0 = 8192.0 * tile_coordinate.y as f64;
+            let y2 = 180.0 - (y0 + point[1]) * 360.0 / total_features;
+            return 360.0 / PI * (y2 * PI / 180.0).exp().atan() - 90.0;
         };
 
-        let tolerance = 0.1 / (1. + tileCoordinate.z as f64);
+        let tolerance = 0.1 / (1. + tile_coordinate.z as f64);
 
+        assert!((-122.41822421550751f64)
+            .approx_eq_eps(&to_web_mercator_lon(&line_string[0]), &tolerance));
         assert!(
-            (-122.41822421550751f64).approx_eq_eps(&toWebMercatorLon(&lineString[0]), &tolerance)
+            37.77852514599172f64.approx_eq_eps(&to_web_mercator_lat(&line_string[0]), &tolerance)
         );
-        assert!(37.77852514599172f64.approx_eq_eps(&toWebMercatorLat(&lineString[0]), &tolerance));
 
+        assert!((-122.41707086563109f64)
+            .approx_eq_eps(&to_web_mercator_lon(&line_string[1]), &tolerance));
         assert!(
-            (-122.41707086563109f64).approx_eq_eps(&toWebMercatorLon(&lineString[1]), &tolerance)
+            37.780424620898664f64.approx_eq_eps(&to_web_mercator_lat(&line_string[1]), &tolerance)
         );
-        assert!(37.780424620898664f64.approx_eq_eps(&toWebMercatorLat(&lineString[1]), &tolerance));
     }
 }
 
@@ -765,7 +714,6 @@ fn gen_tiles(
     output
 }
 
-// Struct equivalent to Arguments in Rust
 struct Arguments {
     input_file: String,
     expected_file: String,
@@ -792,23 +740,30 @@ impl Arguments {
     }
 }
 
-// Implementing the Display trait for Arguments
-impl fmt::Display for Arguments {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{} ({}, {}, {})",
-            self.input_file, self.max_zoom, self.max_points, self.line_metrics
-        )
-    }
-}
-
 #[test]
 fn tile_tests() {
     let tests = [
-        Arguments::new( "fixtures/us-states.json", "fixtures/us-states-tiles.json", 7, 200, false ),
-        Arguments::new( "fixtures/dateline.json", "fixtures/dateline-tiles.json", 7, 200, false ),
-        Arguments::new( "fixtures/dateline.json", "fixtures/dateline-metrics-tiles.json", 0, 10000, true ),
+        Arguments::new(
+            "fixtures/us-states.json",
+            "fixtures/us-states-tiles.json",
+            7,
+            200,
+            false,
+        ),
+        Arguments::new(
+            "fixtures/dateline.json",
+            "fixtures/dateline-tiles.json",
+            7,
+            200,
+            false,
+        ),
+        Arguments::new(
+            "fixtures/dateline.json",
+            "fixtures/dateline-metrics-tiles.json",
+            0,
+            10000,
+            true,
+        ),
         Arguments::new(
             "fixtures/feature.json",
             "fixtures/feature-tiles.json",
@@ -816,7 +771,7 @@ fn tile_tests() {
             10000,
             false,
         ),
-        // In comparison to the C++ code we fixed the loading of MultiPoints in the parseJSONTile helper
+        // In comparison to the C++ code we fixed the loading of MultiPoints in the parse_jsontile helper. Therefore, the below arguments succeed even when comparing the geometries.
         Arguments::new(
             "fixtures/collection.json",
             "fixtures/collection-tiles.json",
@@ -838,30 +793,37 @@ fn tile_tests() {
         let mut data = String::new();
         file.read_to_string(&mut data).unwrap();
         let mut actual = gen_tiles(&data, test.max_zoom, test.max_points, test.line_metrics);
-        let expected = parseJSONTiles(
+        let expected = parse_jsontiles(
             serde_json::from_reader(File::open(&test.expected_file).unwrap()).unwrap(),
         );
 
-        for (key, value) in &mut actual {
+        for (_key, value) in &mut actual {
+            // The JSON files from the JS project flatten all MultiPolygon to a single Polygon with more rings. Do that here so we can compare the geometries.
+            value.features = value
+                .features
+                .iter()
+                .map(|feature| Feature {
+                    bbox: feature.bbox.clone(),
+                    geometry: feature.geometry.clone().map(|geom| {
+                        Geometry::new(match geom.value {
+                            geojson::Value::MultiPolygon(multi) => geojson::Value::Polygon(
+                                multi.iter().flatten().cloned().collect::<Vec<_>>(),
+                            ),
+                            v => v,
+                        })
+                    }),
+                    id: feature.id.clone(),
+                    properties: feature.properties.clone(),
+                    foreign_members: feature.foreign_members.clone(),
+                })
+                .collect();
 
-
-            value.features = value.features.iter().map(|feature| Feature {
-                bbox: feature.bbox.clone(),
-                geometry:  feature.geometry.clone().map(|geom| Geometry::new(match geom.value {
-                    geojson::Value::MultiPolygon(multi) => geojson::Value::Polygon(multi.iter().flatten().cloned().collect::<Vec<_>>()),
-                    v => v
-                })),
-                id:   feature.id.clone(),
-                properties:   feature.properties.clone(),
-                foreign_members:   feature.foreign_members.clone(),
-            }).collect();
-
-            //fs::write(format!("us/actual/{}.json", key), value.clone().to_string()).unwrap();
+            //fs::write(format!("us/actual/{}.json", _key), value.clone().to_string()).unwrap();
         }
 
-        for (key, value) in &expected {
-            //fs::write(format!("us/expected/{}.json", key), value.clone().to_string()).unwrap();
-        }
+        //for (key, value) in &expected {
+        //    fs::write(format!("us/expected/{}.json", key), value.clone().to_string()).unwrap();
+        //}
 
         assert_eq!(expected, actual);
     }
@@ -898,6 +860,7 @@ fn geojson_to_tile_simple() {
     let str = name.as_str().unwrap();
     assert_eq!(str, "P Street Northwest - Massachusetts Avenue Northwest");
 }
+
 #[test]
 fn geojson_to_tile_clips() {
     let geojson = GeoJson::from_reader(BufReader::new(
@@ -944,15 +907,15 @@ fn geojson_to_tile_metrics() {
         ..TileOptions::default()
     };
 
-    let kEpsilon = 1e-5;
+    let k_epsilon = 1e-5;
 
-    let tileLeft = geojson_to_tile(&geojson, 13, 2342, 3133, &options, false, false);
-    assert_eq!(tileLeft.features.features.len(), 1);
+    let tile_left = geojson_to_tile(&geojson, 13, 2342, 3133, &options, false, false);
+    assert_eq!(tile_left.features.features.len(), 1);
 
-    let tileRight = geojson_to_tile(&geojson, 13, 2343, 3133, &options, false, false);
-    assert_eq!(tileRight.features.features.len(), 1);
+    let tile_right = geojson_to_tile(&geojson, 13, 2343, 3133, &options, false, false);
+    assert_eq!(tile_right.features.features.len(), 1);
 
-    let leftProps = tileLeft
+    let left_props = tile_left
         .features
         .features
         .get(0)
@@ -961,16 +924,16 @@ fn geojson_to_tile_metrics() {
         .properties
         .as_ref()
         .unwrap();
-    let leftClipStart = leftProps
+    let left_clip_start = left_props
         .get("mapbox_clip_start")
         .unwrap()
         .as_f64()
         .unwrap();
-    assert!(ulps_eq(&leftClipStart, &0.0, 4));
-    let leftClipEnd = leftProps.get("mapbox_clip_end").unwrap().as_f64().unwrap();
-    assert!(leftClipEnd.approx_eq_eps(&0.42103, &kEpsilon));
+    assert!((&left_clip_start).ulps_eq(&0.0, 0.0, 4));
+    let left_clip_end = left_props.get("mapbox_clip_end").unwrap().as_f64().unwrap();
+    assert!(left_clip_end.approx_eq_eps(&0.42103, &k_epsilon));
 
-    let rightProps = tileRight
+    let right_props = tile_right
         .features
         .features
         .get(0)
@@ -979,14 +942,18 @@ fn geojson_to_tile_metrics() {
         .properties
         .as_ref()
         .unwrap();
-    let rightClipStart = rightProps
+    let right_clip_start = right_props
         .get("mapbox_clip_start")
         .unwrap()
         .as_f64()
         .unwrap();
-    assert!(rightClipStart.approx_eq_eps(&0.40349, &kEpsilon));
-    let rightClipEnd = rightProps.get("mapbox_clip_end").unwrap().as_f64().unwrap();
-    assert!(ulps_eq(&rightClipEnd, &1.0, 4));
+    assert!(right_clip_start.approx_eq_eps(&0.40349, &k_epsilon));
+    let right_clip_end = right_props
+        .get("mapbox_clip_end")
+        .unwrap()
+        .as_f64()
+        .unwrap();
+    assert!((&right_clip_end).ulps_eq(&1.0, 0.0, 4)); // TODO verify this usage!
 }
 
 #[test]
@@ -1015,7 +982,7 @@ fn geojson_to_tile_clip_vertex_on_tile_border() {
         ..Options::default()
     };
 
-    let kEpsilon = 1e-5;
+    let k_epsilon = 1e-5;
 
     let mut index = GeoJSONVT::from_geojson(&geojson, &options);
 
@@ -1040,12 +1007,11 @@ fn geojson_to_tile_clip_vertex_on_tile_border() {
         .properties
         .as_ref()
         .unwrap();
-    let clipStart1 = props.get("mapbox_clip_start").unwrap().as_f64().unwrap();
-    let clipEnd1 = props.get("mapbox_clip_end").unwrap().as_f64().unwrap();
-    assert!(0.660622.approx_eq_eps(&clipStart1, &kEpsilon));
-    assert!(1.0.approx_eq_eps(&clipEnd1, &kEpsilon));
+    let clip_start1 = props.get("mapbox_clip_start").unwrap().as_f64().unwrap();
+    let clip_end1 = props.get("mapbox_clip_end").unwrap().as_f64().unwrap();
+    assert!(0.660622.approx_eq_eps(&clip_start1, &k_epsilon));
+    assert!(1.0.approx_eq_eps(&clip_end1, &k_epsilon));
 }
-
 
 /// See https://github.com/mapbox/geojson-vt/pull/176
 /// And https://github.com/mapbox/geojson-vt/pull/173
@@ -1054,24 +1020,28 @@ fn test_midpoint_calculation() {
     let geojson = GeoJson::from_reader(BufReader::new(
         File::open("fixtures/last_feature.json").unwrap(),
     ))
-        .unwrap();
-    let mut index = GeoJSONVT::from_geojson(&geojson, &Options {
-        tile: TileOptions {
-            tolerance: 3.0,
-            ..TileOptions::default()
+    .unwrap();
+    let mut index = GeoJSONVT::from_geojson(
+        &geojson,
+        &Options {
+            tile: TileOptions {
+                tolerance: 3.0,
+                ..TileOptions::default()
+            },
+            ..Options::default()
         },
-        ..Options::default()
-    });
-    let features = &index.get_tile(6,11,23).features;
+    );
+    let features = &index.get_tile(6, 11, 23).features;
 
-    let expected1 = parseJSONTile(
-        serde_json::from_reader(File::open("fixtures/last_feature-tile-fixed.json").unwrap()).unwrap(),
+    let expected1 = parse_jsontile(
+        serde_json::from_reader(File::open("fixtures/last_feature-tile-fixed.json").unwrap())
+            .unwrap(),
     );
     assert_ne!(features, &expected1);
 
-
-    let expected2 = parseJSONTile(
-        serde_json::from_reader(File::open("fixtures/last_feature-tile-broken-new.json").unwrap()).unwrap(),
+    let expected2 = parse_jsontile(
+        serde_json::from_reader(File::open("fixtures/last_feature-tile-broken-new.json").unwrap())
+            .unwrap(),
     );
     assert_eq!(features, &expected2);
 }

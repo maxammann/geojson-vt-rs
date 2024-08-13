@@ -22,7 +22,7 @@ pub fn get_sq_seg_dist(p: VtPoint, a: VtPoint, b: VtPoint) -> f64 {
     dx = p.x - x;
     dy = p.y - y;
 
-    return dx * dx + dy * dy;
+    dx * dx + dy * dy
 }
 
 // calculate simplification data using optimized Douglas-Peucker algorithm
@@ -53,7 +53,9 @@ pub fn simplify(points: &mut Vec<VtPoint>, first: usize, last: usize, sq_toleran
     if max_sq_dist > sq_tolerance {
         // save the point importance in squared pixels as a z coordinate
         points[index].z = max_sq_dist;
+
         //println!("{index} - {:.70}", max_sq_dist);
+
         if index - first > 1 {
             simplify(points, first, index, sq_tolerance);
         }

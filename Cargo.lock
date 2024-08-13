@@ -54,6 +54,7 @@ dependencies = [
 name = "geojson-vt-rs"
 version = "0.1.0"
 dependencies = [
+ "approx",
  "euclid",
  "geojson",
  "geozero",

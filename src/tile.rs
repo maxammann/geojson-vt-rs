@@ -1,17 +1,12 @@
-use std::collections::HashMap;
-
-use geojson::feature::Id;
 use geojson::{
     Feature, FeatureCollection, Geometry, JsonObject, JsonValue, LineStringType, PointType,
     PolygonType, Value,
 };
+use geojson::feature::Id;
 use serde_json::Number;
 
-use crate::types::{
-    VtEmpty, VtFeature, VtFeatures, VtGeometry, VtGeometryCollection, VtLineString, VtLinearRing,
-    VtMultiLineString, VtMultiPoint, VtMultiPolygon, VtPoint, VtPolygon,
-};
 use crate::{BBox, LinearRingType, MultiLineStringType, MultiPointType, MultiPolygonType};
+use crate::types::*;
 
 pub static EMPTY_TILE: Tile = Tile {
     features: FeatureCollection {
@@ -55,7 +50,7 @@ impl InternalTile {
         tolerance: f64,
         line_metrics: bool,
     ) -> InternalTile {
-        let mut _tile = Self {
+        let mut tile = Self {
             extent,
             z,
             x,
@@ -83,10 +78,10 @@ impl InternalTile {
             let props = &feature.properties;
             let id = &feature.id;
 
-            _tile.tile.num_points += feature.num_points;
+            tile.tile.num_points += feature.num_points;
 
             // TODO Verify if this is correct
-            _tile.add_geometry_feature(
+            tile.add_geometry_feature(
                 geom,
                 if props.is_empty() {
                     None
@@ -96,13 +91,13 @@ impl InternalTile {
                 id,
             );
 
-            _tile.bbox.min.x = feature.bbox.min.x.min(_tile.bbox.min.x);
-            _tile.bbox.min.y = feature.bbox.min.y.min(_tile.bbox.min.y);
-            _tile.bbox.max.x = feature.bbox.max.x.max(_tile.bbox.max.x);
-            _tile.bbox.max.y = feature.bbox.max.y.max(_tile.bbox.max.y);
+            tile.bbox.min.x = feature.bbox.min.x.min(tile.bbox.min.x);
+            tile.bbox.min.y = feature.bbox.min.y.min(tile.bbox.min.y);
+            tile.bbox.max.x = feature.bbox.max.x.max(tile.bbox.max.x);
+            tile.bbox.max.y = feature.bbox.max.y.max(tile.bbox.max.y);
         }
 
-        _tile
+        tile
     }
 }
 
@@ -114,7 +109,7 @@ impl InternalTile {
         id: &Option<Id>,
     ) {
         match geom {
-            VtGeometry::Empty(empty) => self.add_empty_feature(empty, props, id),
+            VtGeometry::Empty(_empty) => unimplemented!(),
             VtGeometry::Point(point) => self.add_point_feature(point, props, id),
             VtGeometry::MultiPoint(multi_point) => {
                 self.add_multi_point_feature(multi_point, props, id)
@@ -135,15 +130,11 @@ impl InternalTile {
         }
     }
 
-    fn add_empty_feature(&mut self, value: &VtEmpty, props: Option<JsonObject>, id: &Option<Id>) {
-        // TODO self.tile.features.features.push(self.transform_empty(value), props, id);
-    }
-
     fn add_point_feature(&mut self, value: &VtPoint, props: Option<JsonObject>, id: &Option<Id>) {
         let geometry = Some(Geometry::new(Value::Point(self.transform_point(value))));
         self.tile.features.features.push(Feature {
             bbox: None,
-            geometry: geometry,
+            geometry,
             id: id.clone(),
             properties: props,
             foreign_members: None,
@@ -185,15 +176,15 @@ impl InternalTile {
         let new_line = self.transform_line_string(line);
         if !new_line.is_empty() {
             if self.line_metrics {
-                let mut newProps = props.unwrap_or_default();
+                let mut new_props = props.unwrap_or_default();
                 let start = line.seg_start / line.dist;
-                newProps.insert(
+                new_props.insert(
                     "mapbox_clip_start".to_string(),
                     if start.fract() == 0.0 {
                         JsonValue::Number(Number::from(start as i64))
                     } else {
                         JsonValue::Number(Number::from_f64(start).unwrap())
-                    }
+                    },
                 );
                 let end = line.seg_end / line.dist;
 
@@ -202,19 +193,19 @@ impl InternalTile {
                 println!("segEnd   {:.70}", line.seg_end);
                 println!("end      {:.70}", end);
                 println!("dist     {:.70}", line.dist);
-                newProps.insert(
+                new_props.insert(
                     "mapbox_clip_end".to_string(),
                     if end.fract() == 0.0 {
                         JsonValue::Number(Number::from(end as i64))
                     } else {
                         JsonValue::Number(Number::from_f64(end).unwrap())
-                    }
+                    },
                 );
                 self.tile.features.features.push(Feature {
                     bbox: None,
                     geometry: Some(Geometry::new(Value::LineString(new_line.clone()))),
                     id: id.clone(),
-                    properties: Some(newProps),
+                    properties: Some(new_props),
                     foreign_members: None,
                 });
             } else {
@@ -311,24 +302,22 @@ impl InternalTile {
     }
 
     fn transform_multi_polygon_feature(&mut self, polygons: &VtMultiPolygon) -> MultiPolygonType {
-        let mut result: MultiPolygonType = Vec::new();
-        result.reserve(polygons.len());
+        let mut result: MultiPolygonType = Vec::with_capacity(polygons.len());
         for polygon in polygons {
             let p = self.transform_polygon(polygon);
             if !p.is_empty() {
                 result.push(p);
             }
         }
-        return result;
+        result
     }
 
     fn transform_multi_point_feature(&mut self, points: &VtMultiPoint) -> MultiPointType {
-        let mut result: MultiPointType = Vec::new();
-        result.reserve(points.len());
+        let mut result: MultiPointType = Vec::with_capacity(points.len());
         for p in points {
             result.push(self.transform_point(p));
         }
-        return result;
+        result
     }
 
     fn transform_line_string(&mut self, line: &VtLineString) -> LineStringType {
@@ -341,43 +330,36 @@ impl InternalTile {
                 }
             }
         }
-        return result;
+        result
     }
 
     fn transform_multi_line_string(&mut self, lines: &VtMultiLineString) -> MultiLineStringType {
-        let mut result: MultiLineStringType = Vec::new();
-        result.reserve(lines.len());
+        let mut result: MultiLineStringType = Vec::with_capacity(lines.len());
         for line in lines {
             if line.dist > self.tolerance {
                 result.push(self.transform_line_string(line));
             }
         }
-        return result;
+        result
     }
 
     fn transform_polygon(&mut self, rings: &VtPolygon) -> PolygonType {
-        let mut result: PolygonType = Vec::new();
-        result.reserve(rings.len());
+        let mut result: PolygonType = Vec::with_capacity(rings.len());
         for ring in rings {
             if ring.area > self.sq_tolerance {
                 result.push(self.transform_linear_ring(ring));
             }
         }
-        return result;
+        result
     }
 
     fn transform_point(&mut self, p: &VtPoint) -> PointType {
         self.tile.num_simplified += 1;
-        return Vec::from(&[
+        Vec::from(&[
             ((p.x * self.z2 - self.x as f64) * self.extent as f64).round(), // TODO do these have the right type. Shouldnt it be i16?
             ((p.y * self.z2 - self.y as f64) * self.extent as f64).round(),
-        ]);
+        ])
     }
-
-    // TODO
-    // fn transform_empty(&self, empty: VtEmpty) -> _ {
-    //    return empty;
-    //}
 
     fn transform_linear_ring(&mut self, ring: &VtLinearRing) -> LinearRingType {
         let mut result: LinearRingType = Vec::new();
@@ -395,6 +377,6 @@ impl InternalTile {
                 }
             }
         }
-        return result;
+        result
     }
 }
