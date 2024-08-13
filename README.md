@@ -1,6 +1,6 @@
 ## geojson-vt-rs &mdash; GeoJSON Vector Tiles 
 
-Port to C++ of [JS GeoJSON-VT](https://github.com/mapbox/geojson-vt) for slicing GeoJSON into vector tiles on the fly.
+Port to Rust of [C++ GeoJSON-VT](https://github.com/mapbox/geojson-vt-cpp) for slicing GeoJSON into vector tiles on the fly.
 
 A highly efficient Rust library for **slicing GeoJSON data into vector tiles on the fly**,  primarily designed to enable rendering and interacting with large geospatial datasets  on the browser side (without a server).
 
