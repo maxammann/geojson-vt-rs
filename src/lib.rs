@@ -22,8 +22,6 @@ mod wrap;
 #[cfg(test)]
 mod tests;
 
-pub struct ToFeatureCollection;
-
 #[derive(Clone)]
 pub struct TileOptions {
     pub tolerance: f64,     // simplification tolerance (higher means simpler)
@@ -64,7 +62,7 @@ impl Default for Options {
     }
 }
 
-pub fn to_id(z: u8, x: u32, y: u32) -> u64 {
+fn to_id(z: u8, x: u32, y: u32) -> u64 {
     (((1u64 << z as u64) * y as u64 + x as u64) * 32) + z as u64
 }
 
@@ -225,7 +223,7 @@ impl GeoJSONVT {
         &EMPTY_TILE
     }
 
-    pub fn get_internal_tiles(&self) -> &HashMap<u64, InternalTile> {
+    pub(crate) fn get_internal_tiles(&self) -> &HashMap<u64, InternalTile> {
         &self.tiles
     }
 
@@ -436,11 +434,11 @@ impl GeoJSONVT {
         tile.source_features = Vec::new();
     }
 
-    pub fn stats(&self) -> &HashMap<u8, u32> {
+    pub(crate) fn stats(&self) -> &HashMap<u8, u32> {
         &self.stats
     }
 
-    pub fn total(&self) -> u32 {
+    pub(crate) fn total(&self) -> u32 {
         self.total
     }
 }
