@@ -19,15 +19,15 @@ You can fine-tune the results with an options struct, although the defaults are 
 
 ```rust
 Options {
-    max_zoom: 18,          // max zoom to preserve detail on; can't be higher than 24
-    index_max_zoom: 5,    // max zoom in the tile index
-    index_max_points: 100000, // max number of points per tile in the tile index
-    generate_id: false,     // whether to generate feature ids, overriding existing ids
+    max_zoom: 18,               // max zoom to preserve detail on; can't be higher than 24
+    index_max_zoom: 5,          // max zoom in the tile index
+    index_max_points: 100000,   // max number of points per tile in the tile index
+    generate_id: false,         // whether to generate feature ids, overriding existing ids
     tile: TileOptions {
-        tolerance: 3.,     // simplification tolerance (higher means simpler)
-        extent: 4096,        // tile extent
-        buffer: 64,        // tile buffer on each side
-        line_metrics: false, // enable line metrics tracking for LineString/MultiLineString features
+        tolerance: 3.,          // simplification tolerance (higher means simpler)
+        extent: 4096,           // tile extent
+        buffer: 64,             // tile buffer on each side
+        line_metrics: false,    // enable line metrics tracking for LineString/MultiLineString features
     }
 }
 ```
