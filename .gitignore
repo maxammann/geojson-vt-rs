@@ -1,2 +1,4 @@
 /target
 .direnv
+# We are a library
+Cargo.lock
