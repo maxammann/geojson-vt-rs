@@ -29,7 +29,7 @@ pub fn get_sq_seg_dist(p: VtPoint, a: VtPoint, b: VtPoint) -> f64 {
 pub fn simplify(points: &mut Vec<VtPoint>, first: usize, last: usize, sq_tolerance: f64) {
     let mut max_sq_dist = sq_tolerance;
     let mut index = 0;
-    let mid: i64 = first as i64 + (last as i64 - first as i64) >> 1;
+    let mid: i64 = first as i64 + ((last as i64 - first as i64) >> 1);
     let mut min_pos_to_mid: i64 = last as i64 - first as i64;
 
     for i in first + 1..last {
