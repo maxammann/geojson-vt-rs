@@ -1,7 +1,6 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
-use euclid::{Point2D, UnknownUnit};
 use geojson::{
     Feature, FeatureCollection, GeoJson, Geometry, LineStringType, PointType, PolygonType,
 };
@@ -443,14 +442,29 @@ impl GeoJSONVT {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Point2D {
+    pub x: f64,
+    pub y: f64
+}
+
+impl Point2D {
+    pub fn new(x: f64, y: f64) -> Self {
+        Self {
+            x,
+            y,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct BBox {
-    pub min: Point2D<f64, UnknownUnit>,
-    pub max: Point2D<f64, UnknownUnit>,
+    pub min: Point2D,
+    pub max: Point2D
 }
 
 impl BBox {
-    pub fn new(min: Point2D<f64, UnknownUnit>, max: Point2D<f64, UnknownUnit>) -> Self {
+    pub fn new(min: Point2D, max: Point2D) -> Self {
         Self { min, max }
     }
 }

@@ -1,7 +1,6 @@
-use euclid::{Point2D, UnknownUnit};
 use geojson::JsonObject;
 
-use crate::BBox;
+use crate::{BBox, Point2D};
 
 pub type VtEmpty = ();
 pub type VtGeometryCollection = Vec<VtGeometry>;
@@ -243,7 +242,7 @@ impl<const I: usize> GetCoordinate<I> for VtPoint {
     }
 }
 
-impl<const I: usize> GetCoordinate<I> for Point2D<f64, UnknownUnit> {
+impl<const I: usize> GetCoordinate<I> for Point2D {
     fn get(&self) -> f64 {
         match I {
             0 => self.x,
