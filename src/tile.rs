@@ -381,14 +381,16 @@ impl InternalTile {
 
     fn transform_linear_ring(&mut self, ring: &VtLinearRing) -> LinearRingType {
         let mut result: LinearRingType = Vec::new();
+        //println!("tile{:?}", self.z);
+        //println!("tolerance{:?}", self.tolerance);
         //println!("sq_tolerance{:?}", self.sq_tolerance);
         if ring.area > self.sq_tolerance {
             result.reserve(ring.elements.len());
             for p in &ring.elements {
+                //eprintln!("p{:.6}, {:.6}, z{:.15}", p.x, p.y, p.z);
+                //eprintln!("{:?}", vec);
                 if p.z > self.sq_tolerance {
-                    //eprintln!("p{:.6}, {:.6}, z{:.15}", p.x, p.y, p.z);
                     let vec = self.transform_point(p);
-                    //eprintln!("{:?}", vec);
                     result.push(vec);
                 }
             }

@@ -1047,23 +1047,31 @@ fn geojson_to_tile_clip_vertex_on_tile_border() {
 }
 
 
+/// See https://github.com/mapbox/geojson-vt/pull/176
+/// And https://github.com/mapbox/geojson-vt/pull/173
 #[test]
-fn web_diff() {
+fn test_midpoint_calculation() {
     let geojson = GeoJson::from_reader(BufReader::new(
         File::open("fixtures/last_feature.json").unwrap(),
     ))
         .unwrap();
-    let mut index = GeoJSONVT::from_geojson(&geojson, &Options::default());
-
+    let mut index = GeoJSONVT::from_geojson(&geojson, &Options {
+        tile: TileOptions {
+            tolerance: 3.0,
+            ..TileOptions::default()
+        },
+        ..Options::default()
+    });
     let features = &index.get_tile(6,11,23).features;
+
     let expected1 = parseJSONTile(
         serde_json::from_reader(File::open("fixtures/last_feature-tile-fixed.json").unwrap()).unwrap(),
     );
-    assert_eq!(features, &expected1);
+    assert_ne!(features, &expected1);
 
 
     let expected2 = parseJSONTile(
         serde_json::from_reader(File::open("fixtures/last_feature-tile-broken-new.json").unwrap()).unwrap(),
     );
-    assert_ne!(features, &expected2);
+    assert_eq!(features, &expected2);
 }
