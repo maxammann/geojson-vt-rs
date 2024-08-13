@@ -3,9 +3,8 @@ use std::f64::consts::PI;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::str::FromStr;
-use approx::UlpsEq;
+use approx::{AbsDiffEq, UlpsEq};
 
-use euclid::approxeq::ApproxEq;
 use geojson::{
     Feature, FeatureCollection, GeoJson, Geometry, JsonValue, LineStringType,
     PointType, PolygonType, Position,
@@ -669,15 +668,15 @@ fn get_tile_projection() {
         let tolerance = 0.1 / (1. + tile_coordinate.z as f64);
 
         assert!((-122.41822421550751f64)
-            .approx_eq_eps(&to_web_mercator_lon(&line_string[0]), &tolerance));
+            .abs_diff_eq(&to_web_mercator_lon(&line_string[0]), tolerance));
         assert!(
-            37.77852514599172f64.approx_eq_eps(&to_web_mercator_lat(&line_string[0]), &tolerance)
+            37.77852514599172f64.abs_diff_eq(&to_web_mercator_lat(&line_string[0]), tolerance)
         );
 
         assert!((-122.41707086563109f64)
-            .approx_eq_eps(&to_web_mercator_lon(&line_string[1]), &tolerance));
+            .abs_diff_eq(&to_web_mercator_lon(&line_string[1]), tolerance));
         assert!(
-            37.780424620898664f64.approx_eq_eps(&to_web_mercator_lat(&line_string[1]), &tolerance)
+            37.780424620898664f64.abs_diff_eq(&to_web_mercator_lat(&line_string[1]), tolerance)
         );
     }
 }
@@ -931,7 +930,7 @@ fn geojson_to_tile_metrics() {
         .unwrap();
     assert!((&left_clip_start).ulps_eq(&0.0, 0.0, 4));
     let left_clip_end = left_props.get("mapbox_clip_end").unwrap().as_f64().unwrap();
-    assert!(left_clip_end.approx_eq_eps(&0.42103, &k_epsilon));
+    assert!(left_clip_end.abs_diff_eq(&0.42103, k_epsilon));
 
     let right_props = tile_right
         .features
@@ -947,7 +946,7 @@ fn geojson_to_tile_metrics() {
         .unwrap()
         .as_f64()
         .unwrap();
-    assert!(right_clip_start.approx_eq_eps(&0.40349, &k_epsilon));
+    assert!(right_clip_start.abs_diff_eq(&0.40349, k_epsilon));
     let right_clip_end = right_props
         .get("mapbox_clip_end")
         .unwrap()
@@ -1009,8 +1008,8 @@ fn geojson_to_tile_clip_vertex_on_tile_border() {
         .unwrap();
     let clip_start1 = props.get("mapbox_clip_start").unwrap().as_f64().unwrap();
     let clip_end1 = props.get("mapbox_clip_end").unwrap().as_f64().unwrap();
-    assert!(0.660622.approx_eq_eps(&clip_start1, &k_epsilon));
-    assert!(1.0.approx_eq_eps(&clip_end1, &k_epsilon));
+    assert!(0.660622.abs_diff_eq(&clip_start1, k_epsilon));
+    assert!(1.0.abs_diff_eq(&clip_end1, k_epsilon));
 }
 
 /// See https://github.com/mapbox/geojson-vt/pull/176
