@@ -11,3 +11,8 @@ geojson = "0.24.1"
 
 [dev-dependencies]
 approx = "0.5.1"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "benchmark"
+harness = false
