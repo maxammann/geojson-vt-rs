@@ -290,14 +290,14 @@ impl GeoJSONVT {
                     },
                 );
                 self.total += 1;
-                println!("tile z{z}-{x}-{y}");
+                //println!("tile z{z}-{x}-{y}");
             }
         };
 
         let tile = self.tiles.get_mut(&id).expect("can no longer be None");
 
         if features.is_empty() {
-            eprintln!("no feature");
+            //eprintln!("no feature");
             return;
         }
 
@@ -307,7 +307,7 @@ impl GeoJSONVT {
             if z == self.options.index_max_zoom
                 || tile.tile.num_points <= self.options.index_max_points
             {
-                println!("reached max zoom");
+                //println!("reached max zoom");
                 tile.source_features = features.clone();
                 return;
             }
@@ -315,14 +315,14 @@ impl GeoJSONVT {
             // drilldown to a specific tile;
             // stop tiling if we reached base zoom
             if z == self.options.max_zoom {
-                println!("reached base zoom");
+                //println!("reached base zoom");
                 return;
             }
 
             // stop tiling if it's our target tile zoom
             if z == cz {
                 tile.source_features = features.clone();
-                println!("target tile zoom");
+                //println!("target tile zoom");
                 return;
             }
 
@@ -331,7 +331,7 @@ impl GeoJSONVT {
             let a = (cx as f64 / m).floor() as u32;
             let b = (cy as f64 / m).floor() as u32;
             if x != a || y != b {
-                println!("not an ancestor");
+                //println!("not an ancestor");
                 tile.source_features = features.clone();
                 return;
             }

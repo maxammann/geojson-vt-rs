@@ -187,12 +187,7 @@ impl InternalTile {
                     },
                 );
                 let end = line.seg_end / line.dist;
-
-                println!("segStart {:.70}", line.seg_start);
-                println!("start    {:.70}", start);
-                println!("segEnd   {:.70}", line.seg_end);
-                println!("end      {:.70}", end);
-                println!("dist     {:.70}", line.dist);
+                
                 new_props.insert(
                     "mapbox_clip_end".to_string(),
                     if end.fract() == 0.0 {
