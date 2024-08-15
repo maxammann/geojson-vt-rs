@@ -115,17 +115,17 @@ impl<const I: usize> Clipper<I> {
 impl<const I: usize> Clipper<I> {
     fn new_slice(&self, line: &VtLineString) -> VtLineString {
         let mut slice: VtLineString = VtLineString {
-            dist: line.dist, 
+            dist: line.dist,
             ..Default::default()
         };
-        
+
         if self.line_metrics {
             slice.seg_start = line.seg_start;
             slice.seg_end = line.seg_end;
         }
         slice
     }
-    
+
     fn clip_line(&self, line: &VtLineString, slices: &mut Vec<VtLineString>) {
         let len = line.elements.len();
         let mut line_len = line.seg_start;
@@ -264,9 +264,9 @@ impl<const I: usize> Clipper<I> {
         let len = ring.elements.len();
         let mut slice = VtLinearRing {
             area: ring.area,
-            ..Default::default() 
+            ..Default::default()
         };
-        
+
         if len < 2 {
             return slice;
         }

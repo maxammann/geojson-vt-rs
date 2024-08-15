@@ -16,10 +16,8 @@ pub struct Project {
 }
 
 impl Project {
-    
     // TODO
-    pub fn project_empty(&self) -> VtEmpty {
-    }
+    pub fn project_empty(&self) -> VtEmpty {}
 
     pub fn project_point(&self, p: PointType) -> VtPoint {
         let sine = (p[1] * PI / 180.).sin();

@@ -445,22 +445,19 @@ impl GeoJSONVT {
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Point2D {
     pub x: f64,
-    pub y: f64
+    pub y: f64,
 }
 
 impl Point2D {
     pub fn new(x: f64, y: f64) -> Self {
-        Self {
-            x,
-            y,
-        }
+        Self { x, y }
     }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct BBox {
     pub min: Point2D,
-    pub max: Point2D
+    pub max: Point2D,
 }
 
 impl BBox {

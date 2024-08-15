@@ -1,12 +1,12 @@
+use geojson::feature::Id;
 use geojson::{
     Feature, FeatureCollection, Geometry, JsonObject, JsonValue, LineStringType, PointType,
     PolygonType, Value,
 };
-use geojson::feature::Id;
 use serde_json::Number;
 
-use crate::{BBox, LinearRingType, MultiLineStringType, MultiPointType, MultiPolygonType};
 use crate::types::*;
+use crate::{BBox, LinearRingType, MultiLineStringType, MultiPointType, MultiPolygonType};
 
 pub static EMPTY_TILE: Tile = Tile {
     features: FeatureCollection {

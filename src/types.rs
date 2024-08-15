@@ -91,7 +91,7 @@ pub struct VtLineString {
     pub elements: Vec<VtPoint>,
     pub dist: f64, // line length
     pub seg_start: f64,
-    pub seg_end: f64,// seg_start and seg_end are distance along a line in tile units, when lineMetrics = true
+    pub seg_end: f64, // seg_start and seg_end are distance along a line in tile units, when lineMetrics = true
 }
 
 impl VtLineString {
@@ -223,7 +223,6 @@ impl VtFeature {
 }
 
 pub type VtFeatures = Vec<VtFeature>;
-
 
 // Function templates to get coordinates
 pub trait GetCoordinate<const I: usize> {
