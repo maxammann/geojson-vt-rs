@@ -1,24 +1,25 @@
+use approx::{AbsDiffEq, UlpsEq};
 use std::collections::HashMap;
 use std::f64::consts::PI;
+use std::fs;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::str::FromStr;
-use approx::{AbsDiffEq, UlpsEq};
 
-use geojson::{
-    Feature, FeatureCollection, GeoJson, Geometry, JsonValue, LineStringType,
-    PointType, PolygonType, Position,
-};
 use geojson::feature::Id;
+use geojson::{
+    Feature, FeatureCollection, GeoJson, Geometry, JsonValue, LineStringType, PointType,
+    PolygonType, Position,
+};
 use serde_json::{Number, Value};
 
-use crate::{
-    geojson_to_tile, GeoJSONVT, LinearRingType, MultiLineStringType, Options, TileOptions,
-};
 use crate::clip::Clipper;
 use crate::simplify::simplify_wrapper;
 use crate::tile::EMPTY_TILE;
 use crate::types::*;
+use crate::{
+    geojson_to_tile, GeoJSONVT, LinearRingType, MultiLineStringType, Options, TileOptions,
+};
 
 macro_rules! points {
     // Match a block containing tuples separated by commas
@@ -667,17 +668,15 @@ fn get_tile_projection() {
 
         let tolerance = 0.1 / (1. + tile_coordinate.z as f64);
 
-        assert!((-122.41822421550751f64)
-            .abs_diff_eq(&to_web_mercator_lon(&line_string[0]), tolerance));
         assert!(
-            37.77852514599172f64.abs_diff_eq(&to_web_mercator_lat(&line_string[0]), tolerance)
+            (-122.41822421550751f64).abs_diff_eq(&to_web_mercator_lon(&line_string[0]), tolerance)
         );
+        assert!(37.77852514599172f64.abs_diff_eq(&to_web_mercator_lat(&line_string[0]), tolerance));
 
-        assert!((-122.41707086563109f64)
-            .abs_diff_eq(&to_web_mercator_lon(&line_string[1]), tolerance));
         assert!(
-            37.780424620898664f64.abs_diff_eq(&to_web_mercator_lat(&line_string[1]), tolerance)
+            (-122.41707086563109f64).abs_diff_eq(&to_web_mercator_lon(&line_string[1]), tolerance)
         );
+        assert!(37.780424620898664f64.abs_diff_eq(&to_web_mercator_lat(&line_string[1]), tolerance));
     }
 }
 
@@ -788,9 +787,7 @@ fn tile_tests() {
     ];
 
     for test in tests {
-        let mut file = File::open(&test.input_file).unwrap();
-        let mut data = String::new();
-        file.read_to_string(&mut data).unwrap();
+        let data = fs::read_to_string(&test.input_file).unwrap();
         let mut actual = gen_tiles(&data, test.max_zoom, test.max_points, test.line_metrics);
         let expected = parse_jsontiles(
             serde_json::from_reader(File::open(&test.expected_file).unwrap()).unwrap(),
