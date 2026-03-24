@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 serde_json = { version = "1", features = ["float_roundtrip"] }
-geojson = "0.24.1"
+geojson = "1.0"
 
 [dev-dependencies]
 approx = "0.5.1"

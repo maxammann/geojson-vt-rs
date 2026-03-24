@@ -1,7 +1,7 @@
 use std::f64::consts::PI;
 
 use geojson::feature::Id;
-use geojson::{FeatureCollection, Geometry, LineStringType, PointType, PolygonType, Value};
+use geojson::{FeatureCollection, Geometry, GeometryValue, LineStringType, PointType, PolygonType};
 use serde_json::Number;
 
 use crate::simplify::simplify_wrapper;
@@ -86,20 +86,26 @@ impl Project {
 
     pub fn project_geometry(&self, geometry: &Geometry) -> VtGeometry {
         match &geometry.value {
-            Value::Point(value) => VtGeometry::Point(self.project_point(value.clone())),
-            Value::MultiPoint(value) => VtGeometry::MultiPoint(self.project_multi_point(value)),
-            Value::LineString(value) => {
-                VtGeometry::LineString(self.project_line_string(value.clone()))
+            GeometryValue::Point { coordinates } => {
+                VtGeometry::Point(self.project_point(coordinates.clone()))
             }
-            Value::MultiLineString(value) => {
-                VtGeometry::MultiLineString(self.project_multi_line_string(value))
+            GeometryValue::MultiPoint { coordinates } => {
+                VtGeometry::MultiPoint(self.project_multi_point(coordinates))
             }
-            Value::Polygon(value) => VtGeometry::Polygon(self.project_polygon(value)),
-            Value::MultiPolygon(value) => {
-                VtGeometry::MultiPolygon(self.project_multi_polygon(value))
+            GeometryValue::LineString { coordinates } => {
+                VtGeometry::LineString(self.project_line_string(coordinates.clone()))
             }
-            Value::GeometryCollection(value) => {
-                VtGeometry::GeometryCollection(self.project_geometry_collection(value))
+            GeometryValue::MultiLineString { coordinates } => {
+                VtGeometry::MultiLineString(self.project_multi_line_string(coordinates))
+            }
+            GeometryValue::Polygon { coordinates } => {
+                VtGeometry::Polygon(self.project_polygon(coordinates))
+            }
+            GeometryValue::MultiPolygon { coordinates } => {
+                VtGeometry::MultiPolygon(self.project_multi_polygon(coordinates))
+            }
+            GeometryValue::GeometryCollection { geometries } => {
+                VtGeometry::GeometryCollection(self.project_geometry_collection(geometries))
             }
         }
     }

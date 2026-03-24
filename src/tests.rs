@@ -107,19 +107,23 @@ fn parse_jsontile(tile: JsonValue) -> FeatureCollection {
                 if tile_geom.len() == 1 {
                     let pt = tile_geom.first().unwrap();
                     assert_eq!(pt.as_array().unwrap().len(), 2);
-                    feat.geometry = Some(Geometry::new(geojson::Value::Point(PointType::from(&[
-                        pt.get(0).unwrap().as_f64().unwrap(),
-                        pt.get(1).unwrap().as_f64().unwrap(),
-                    ]))))
+                    feat.geometry = Some(Geometry::new(geojson::GeometryValue::Point {
+                        coordinates: PointType::from([
+                            pt.get(0).unwrap().as_f64().unwrap(),
+                            pt.get(1).unwrap().as_f64().unwrap(),
+                        ]),
+                    }))
                 } else {
                     let mut points = vec![];
                     for pt in tile_geom {
-                        points.push(PointType::from(&[
+                        points.push(PointType::from([
                             pt.get(0).unwrap().as_f64().unwrap(),
                             pt.get(1).unwrap().as_f64().unwrap(),
                         ]))
                     }
-                    feat.geometry = Some(Geometry::new(geojson::Value::MultiPoint(points)))
+                    feat.geometry = Some(Geometry::new(geojson::GeometryValue::MultiPoint {
+                        coordinates: points,
+                    }))
                 }
             } else if geom_type == 2 {
                 // linestring geometry
@@ -129,14 +133,15 @@ fn parse_jsontile(tile: JsonValue) -> FeatureCollection {
                     let mut line_string: LineStringType = Vec::new();
                     for pt in part.as_array().unwrap() {
                         assert_eq!(pt.as_array().unwrap().len(), 2);
-                        line_string.push(PointType::from(&[
+                        line_string.push(PointType::from([
                             pt.get(0).unwrap().as_f64().unwrap(),
                             pt.get(1).unwrap().as_f64().unwrap(),
                         ]));
                     }
                     if !is_multi {
-                        feat.geometry =
-                            Some(Geometry::new(geojson::Value::LineString(line_string)));
+                        feat.geometry = Some(Geometry::new(geojson::GeometryValue::LineString {
+                            coordinates: line_string,
+                        }));
                         break;
                     } else {
                         multi_line.push(line_string);
@@ -144,8 +149,9 @@ fn parse_jsontile(tile: JsonValue) -> FeatureCollection {
                 }
 
                 if is_multi {
-                    feat.geometry =
-                        Some(Geometry::new(geojson::Value::MultiLineString(multi_line)));
+                    feat.geometry = Some(Geometry::new(geojson::GeometryValue::MultiLineString {
+                        coordinates: multi_line,
+                    }));
                 }
             } else if geom_type == 3 {
                 // polygon geometry
@@ -154,14 +160,16 @@ fn parse_jsontile(tile: JsonValue) -> FeatureCollection {
                     let mut linear_ring: LinearRingType = Vec::new();
                     for pt in ring.as_array().unwrap() {
                         assert_eq!(pt.as_array().unwrap().len(), 2);
-                        linear_ring.push(PointType::from(&[
+                        linear_ring.push(PointType::from([
                             pt.get(0).unwrap().as_f64().unwrap(),
                             pt.get(1).unwrap().as_f64().unwrap(),
                         ]));
                     }
                     poly.push(linear_ring);
                 }
-                feat.geometry = Some(Geometry::new(geojson::Value::Polygon(poly)));
+                feat.geometry = Some(Geometry::new(geojson::GeometryValue::Polygon {
+                    coordinates: poly,
+                }));
             } else {
                 panic!("unknown geometry type")
             }
@@ -522,13 +530,15 @@ fn get_tile_polygon_clipping_bug() {
     assert_eq!(tile.features.features.len(), 1);
     assert_eq!(tile.num_points, 5);
 
-    let expected = Geometry::new(geojson::Value::Polygon(PolygonType::from(&[vec![
-        PointType::from(&[3072., 3072.]),
-        PointType::from(&[5120., 3072.]),
-        PointType::from(&[5120., 5120.]),
-        PointType::from(&[3072., 5120.]),
-        PointType::from(&[3072., 3072.]),
-    ]])));
+    let expected = Geometry::new(geojson::GeometryValue::Polygon {
+        coordinates: vec![vec![
+            PointType::from([3072., 3072.]),
+            PointType::from([5120., 3072.]),
+            PointType::from([5120., 5120.]),
+            PointType::from([3072., 5120.]),
+            PointType::from([3072., 3072.]),
+        ]],
+    });
 
     let actual = tile.features.features[0].geometry.as_ref().unwrap();
 
@@ -649,7 +659,7 @@ fn get_tile_projection() {
             .value;
 
         let line_string = match geometry {
-            geojson::Value::LineString(line_string) => line_string,
+            geojson::GeometryValue::LineString { coordinates } => coordinates,
             _ => panic!("not a linestring"),
         };
         assert_eq!(line_string.len(), 2);
@@ -803,9 +813,15 @@ fn tile_tests() {
                     bbox: feature.bbox.clone(),
                     geometry: feature.geometry.clone().map(|geom| {
                         Geometry::new(match geom.value {
-                            geojson::Value::MultiPolygon(multi) => geojson::Value::Polygon(
-                                multi.iter().flatten().cloned().collect::<Vec<_>>(),
-                            ),
+                            geojson::GeometryValue::MultiPolygon { coordinates: multi } => {
+                                geojson::GeometryValue::Polygon {
+                                    coordinates: multi
+                                        .iter()
+                                        .flatten()
+                                        .cloned()
+                                        .collect::<Vec<_>>(),
+                                }
+                            }
                             v => v,
                         })
                     }),
@@ -986,10 +1002,13 @@ fn geojson_to_tile_clip_vertex_on_tile_border() {
     let tile = index.get_tile(13, 2344, 3134);
     assert!(!tile.features.features.is_empty());
 
-    let expected: LineStringType = LineStringType::from(&[vec![-2048., 2747.], vec![408., 5037.]]);
+    let expected: LineStringType = vec![
+        Position::from([-2048., 2747.]),
+        Position::from([408., 5037.]),
+    ];
 
     let actual = match &tile.features.features[0].geometry.as_ref().unwrap().value {
-        geojson::Value::LineString(line_string) => line_string,
+        geojson::GeometryValue::LineString { coordinates } => coordinates,
         _ => panic!("must be linestring"),
     };
     assert_eq!(actual, &expected);
@@ -1187,10 +1206,13 @@ fn preprocessed_geojson_clip_vertex_on_tile_border() {
     let tile = preprocessed.generate_tile(13, 2344, 3134);
     assert!(!tile.features.features.is_empty());
 
-    let expected: LineStringType = LineStringType::from(&[vec![-2048., 2747.], vec![408., 5037.]]);
+    let expected: LineStringType = vec![
+        Position::from([-2048., 2747.]),
+        Position::from([408., 5037.]),
+    ];
 
     let actual = match &tile.features.features[0].geometry.as_ref().unwrap().value {
-        geojson::Value::LineString(line_string) => line_string,
+        geojson::GeometryValue::LineString { coordinates } => coordinates,
         _ => panic!("must be linestring"),
     };
     assert_eq!(actual, &expected);
