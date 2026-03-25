@@ -1,7 +1,7 @@
 use geojson::feature::Id;
 use geojson::{
-    Feature, FeatureCollection, Geometry, JsonObject, JsonValue, LineStringType, PointType,
-    PolygonType, Value,
+    Feature, FeatureCollection, Geometry, GeometryValue, JsonObject, JsonValue, LineStringType,
+    PointType, PolygonType,
 };
 use serde_json::Number;
 
@@ -131,7 +131,9 @@ impl InternalTile {
     }
 
     fn add_point_feature(&mut self, value: &VtPoint, props: Option<JsonObject>, id: &Option<Id>) {
-        let geometry = Some(Geometry::new(Value::Point(self.transform_point(value))));
+        let geometry = Some(Geometry::new(GeometryValue::Point {
+            coordinates: self.transform_point(value),
+        }));
         self.tile.features.features.push(Feature {
             bbox: None,
             geometry,
@@ -153,14 +155,18 @@ impl InternalTile {
             0 => {}
             1 => self.tile.features.features.push(Feature {
                 bbox: None,
-                geometry: Some(Geometry::new(Value::Point(new_multi[0].clone()))),
+                geometry: Some(Geometry::new(GeometryValue::Point {
+                    coordinates: new_multi[0].clone(),
+                })),
                 id: id.clone(),
                 properties: props,
                 foreign_members: None,
             }),
             _ => self.tile.features.features.push(Feature {
                 bbox: None,
-                geometry: Some(Geometry::new(Value::MultiPoint(new_multi.clone()))),
+                geometry: Some(Geometry::new(GeometryValue::MultiPoint {
+                    coordinates: new_multi.clone(),
+                })),
                 id: id.clone(),
                 properties: props,
                 foreign_members: None,
@@ -187,7 +193,7 @@ impl InternalTile {
                     },
                 );
                 let end = line.seg_end / line.dist;
-                
+
                 new_props.insert(
                     "mapbox_clip_end".to_string(),
                     if end.fract() == 0.0 {
@@ -198,7 +204,9 @@ impl InternalTile {
                 );
                 self.tile.features.features.push(Feature {
                     bbox: None,
-                    geometry: Some(Geometry::new(Value::LineString(new_line.clone()))),
+                    geometry: Some(Geometry::new(GeometryValue::LineString {
+                        coordinates: new_line.clone(),
+                    })),
                     id: id.clone(),
                     properties: Some(new_props),
                     foreign_members: None,
@@ -206,7 +214,9 @@ impl InternalTile {
             } else {
                 self.tile.features.features.push(Feature {
                     bbox: None,
-                    geometry: Some(Geometry::new(Value::LineString(new_line.clone()))),
+                    geometry: Some(Geometry::new(GeometryValue::LineString {
+                        coordinates: new_line.clone(),
+                    })),
                     id: id.clone(),
                     properties: props,
                     foreign_members: None,
@@ -226,14 +236,18 @@ impl InternalTile {
             0 => {}
             1 => self.tile.features.features.push(Feature {
                 bbox: None,
-                geometry: Some(Geometry::new(Value::LineString(new_multi[0].clone()))),
+                geometry: Some(Geometry::new(GeometryValue::LineString {
+                    coordinates: new_multi[0].clone(),
+                })),
                 id: id.clone(),
                 properties: props,
                 foreign_members: None,
             }),
             _ => self.tile.features.features.push(Feature {
                 bbox: None,
-                geometry: Some(Geometry::new(Value::MultiLineString(new_multi.clone()))),
+                geometry: Some(Geometry::new(GeometryValue::MultiLineString {
+                    coordinates: new_multi.clone(),
+                })),
                 id: id.clone(),
                 properties: props,
                 foreign_members: None,
@@ -250,7 +264,9 @@ impl InternalTile {
         if !new_polygon.is_empty() {
             self.tile.features.features.push(Feature {
                 bbox: None,
-                geometry: Some(Geometry::new(Value::Polygon(new_polygon.clone()))),
+                geometry: Some(Geometry::new(GeometryValue::Polygon {
+                    coordinates: new_polygon.clone(),
+                })),
                 id: id.clone(),
                 properties: props,
                 foreign_members: None,
@@ -269,14 +285,18 @@ impl InternalTile {
             0 => {}
             1 => self.tile.features.features.push(Feature {
                 bbox: None,
-                geometry: Some(Geometry::new(Value::Polygon(new_multi[0].clone()))),
+                geometry: Some(Geometry::new(GeometryValue::Polygon {
+                    coordinates: new_multi[0].clone(),
+                })),
                 id: id.clone(),
                 properties: props,
                 foreign_members: None,
             }),
             _ => self.tile.features.features.push(Feature {
                 bbox: None,
-                geometry: Some(Geometry::new(Value::MultiPolygon(new_multi.clone()))),
+                geometry: Some(Geometry::new(GeometryValue::MultiPolygon {
+                    coordinates: new_multi.clone(),
+                })),
                 id: id.clone(),
                 properties: props,
                 foreign_members: None,
@@ -350,10 +370,11 @@ impl InternalTile {
 
     fn transform_point(&mut self, p: &VtPoint) -> PointType {
         self.tile.num_simplified += 1;
-        Vec::from(&[
+        [
             ((p.x * self.z2 - self.x as f64) * self.extent as f64).round(), // TODO do these have the right type. Shouldnt it be i16?
             ((p.y * self.z2 - self.y as f64) * self.extent as f64).round(),
-        ])
+        ]
+        .into()
     }
 
     fn transform_linear_ring(&mut self, ring: &VtLinearRing) -> LinearRingType {
